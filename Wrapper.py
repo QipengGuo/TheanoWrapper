@@ -9,38 +9,47 @@ from collections import OrderedDict
 
 ### Utility functions begin
 def get_fans(shape):
-	'''
-	Borrowed from keras
-	'''
-	fan_in = shape[0] if len(shape) == 2 else NP.prod(shape[1:])
-	fan_out = shape[1] if len(shape) == 2 else shape[0]
-	return fan_in, fan_out
+    '''
+    Borrowed from keras
+    '''
+    fan_in = shape[0] if len(shape) == 2 else NP.prod(shape[1:])
+    fan_out = shape[1] if len(shape) == 2 else shape[0]
+    return fan_in, fan_out
 
 def glorot_uniform(shape):
-	'''
-	Borrowed from keras
-	'''
-	fan_in, fan_out = get_fans(shape)
-	s = NP.sqrt(6. / (fan_in + fan_out))
-	return NP.cast[T.config.floatX](RNG.uniform(low=-s, high=s, size=shape))
+    '''
+    Borrowed from keras
+    '''
+    fan_in, fan_out = get_fans(shape)
+    s = NP.sqrt(6. / (fan_in + fan_out))
+    return NP.cast[T.config.floatX](RNG.uniform(low=-s, high=s, size=shape))
 
 def orthogonal(shape, scale=1.1):
-	'''
-	Borrowed from keras
-	'''
-	flat_shape = (shape[0], NP.prod(shape[1:]))
-	a = RNG.normal(0, 1, flat_shape)
-	u, _, v = NP.linalg.svd(a, full_matrices=False)
-	q = u if u.shape == flat_shape else v
-	q = q.reshape(shape)
-	return NP.cast[T.config.floatX](q)
-	
+    '''
+    Borrowed from keras
+    '''
+    flat_shape = (shape[0], NP.prod(shape[1:]))
+    a = RNG.normal(0, 1, flat_shape)
+    u, _, v = NP.linalg.svd(a, full_matrices=False)
+    q = u if u.shape == flat_shape else v
+    q = q.reshape(shape)
+    return NP.cast[T.config.floatX](q)
+
 class Model(object):
     def __init__(self):
         self.weightsPack = WeightsPack()
         self.layersPack = LayersPack()
+        self.conv2d = NN.conv2d
+        if theano.config.device[:3] == 'gpu':
+            import theano.sandbox.cuda.dnn as CUDNN
+            if CUDNN.dnn_available():
+                print 'Using CUDNN instead of Theano conv2d'
+                conv2d = CUDNN.dnn_conv
     
     def gru(self, cur_in=None, rec_in=None, name=None, shape=[]):  
+        if len(shape)<1 and (name in self.layersPack.keys()):
+            shape = layersPack.get(name)
+
         in_dim, out_dim = shape
         params = [None]*9
         Wname_list = [name+'_W_h', name+'_U_h', name+'_b_h',name+'_W_r', name+'_U_r', name+'_b_r', name+'_W_z', name+'_U_z', name+'_b_z']
@@ -62,7 +71,7 @@ class Model(object):
             self.weightsPack.add_list(params, Wname_list)
 
             #add gru to layers pack
-            self.layersPack.add(name, shape)
+            self.layersPack.add(name, shape, ltype='gru')
         else:
             for i in xrange(len(Wname_list)):
                 params[i] = self.weightsPack.get(Wname_list[i])
@@ -75,6 +84,9 @@ class Model(object):
         return gru_h
             
     def fc(self, cur_in=None, name=None, shape=[]):
+        if len(shape)<1 and (name in self.layersPack.keys()):
+            shape = layersPack.get(name)
+
         in_dim, out_dim = shape
         params = [None]*2
         Wname_list = [name+'_W',name+'_b']
@@ -87,8 +99,8 @@ class Model(object):
             #add W to weights pack
             self.weightsPack.add_list(params, Wname_list)
 
-            #add gru to layers pack
-            self.layersPack.add(name, shape)
+            #add fc to layers pack
+            self.layersPack.add(name, shape, ltype='fc')
         else:
             for i in xrange(len(Wname_list)):
                 params[i] = self.weightsPack.get(Wname_list[i])
@@ -96,7 +108,31 @@ class Model(object):
         fc_h = NN.sigmoid(T.dot(cur_in, params[0])+params[1])
 
         return fc_h
-    
+
+    def conv(self, cur_in=None, name=None, shape=[]):
+        if len(shape)<1 and (name in self.layersPack.keys()):
+            shape = layersPack.get(name)
+
+        nr_filters, nr_channels, filter_row, filter_col, conv_stride_row, conv_stride_col = shape
+        params = [None] * 1
+        Wname_list = [name+'_W']
+        if name not in self.layersPack.keys():
+            #W
+            params[0] = theano.shared(glorot_uniform((nr_filters, nr_channels, filter_row, filter_col)), name='conv_W') 
+
+            #add W to weighs pack
+            self.weightsPack.add_list(params, Wname_list)
+
+            #add conv to layers pack
+            self.layersPack.add(name, shape, ltype='conv')
+        else:
+            for i in xrange(len(Wname_list)):
+                params[i] = self.weightsPack.get(Wname_list[i])
+        
+        conv_h = self.conv2d(cur_in, params[0], subsample=(conv_stride_row, conv_stride_col)) 
+
+        return conv_h
+ 
 def rmsprop(cost, params, lr=0.0005, rho=0.9, epsilon=1e-6):
     '''
     Borrowed from keras, no constraints, though
@@ -151,7 +187,7 @@ class LayersPack(object):
         self.num_elem = 0
         self.shape = []
     
-    def add(self, name, shape):
+    def add(self, name, shape, ltype):
         self.idxs[name] = self.num_elem
         self.num_elem += 1
         self.shape.append(shape)
