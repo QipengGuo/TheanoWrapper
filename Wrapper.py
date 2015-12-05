@@ -45,7 +45,11 @@ class Model(object):
             if CUDNN.dnn_available():
                 print 'Using CUDNN instead of Theano conv2d'
                 conv2d = CUDNN.dnn_conv
-    
+
+    def clear(self):
+        self.weightsPack = WeightsPack()
+        self.layersPack = LayersPack()
+
     def gru(self, cur_in=None, rec_in=None, name=None, shape=[]):  
         if len(shape)<1 and (name in self.layersPack.keys()):
             shape = layersPack.get(name)
@@ -179,6 +183,7 @@ class WeightsPack(object):
         file = h5py.File(path, 'w')
         self.idxs, self.num_elem, self.vect = file['WeightsPack'][:]
         file.close()
+
 
 class LayersPack(object):
     #A helper class to store layers
