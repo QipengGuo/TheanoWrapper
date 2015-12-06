@@ -3,7 +3,7 @@ import theano.tensor as T
 import theano.tensor.nnet as NN
 import numpy as NP
 import numpy.random as RNG
-import h5py
+#import h5py 
 import dataUtils
 from collections import OrderedDict
 
@@ -45,6 +45,14 @@ class Model(object):
             if CUDNN.dnn_available():
                 print 'Using CUDNN instead of Theano conv2d'
                 conv2d = CUDNN.dnn_conv
+
+    def save(self, path):
+        self.weightsPack.save(path+'_W.npz')
+        self.layersPack.save(path+'_L.npz')
+
+    def load(self, path):
+        self.weightsPack.load(path+'_W.npz')
+        self.layersPack.load(path+'_L.npz')
 
     def clear(self):
         self.weightsPack = WeightsPack()
@@ -109,7 +117,7 @@ class Model(object):
             for i in xrange(len(Wname_list)):
                 params[i] = self.weightsPack.get(Wname_list[i])
 
-        fc_h = NN.sigmoid(T.dot(cur_in, params[0])+params[1])
+        fc_h = T.dot(cur_in, params[0])+params[1]
 
         return fc_h
 
@@ -175,14 +183,25 @@ class WeightsPack(object):
         return self.vect
     
     def save(self, path):
-        file = h5py.File(path, 'w')
-        file.create_dataset('WeightsPack', data=(self.idxs, self.num_elem, self.vect))
-        file.close()
+        NP.savez(path, idxs=self.idxs, num_elem=self.num_elem, vect=self.vect)
+
+        #file = h5py.File(path, 'w')
+        #file.create_dataset('W_idxs', data=(self.idxs))
+        #file.create_dataset('W_num_elem', data=(self.num_elem))
+        #file.create_dataset('W_vect', data=(self.vect))
+        #file.close()
         
     def load(self, path):
-        file = h5py.File(path, 'w')
-        self.idxs, self.num_elem, self.vect = file['WeightsPack'][:]
-        file.close()
+        data = NP.load(path)
+        self.idxs = data['idxs'].tolist()
+        self.num_elem = data['num_elem'].tolist()
+        self.vect = data['vect'].tolist()
+
+        #file = h5py.File(path, 'r')
+        #self.idxs  = file['W_idxs'][:]
+        #self.num_elem = file['W_num_elem'][:]
+        #self.vect = file['W_vect'][:]
+        #file.close()
 
 
 class LayersPack(object):
@@ -204,12 +223,21 @@ class LayersPack(object):
         return self.idxs.keys()
     
     def save(self, path):
-        file = h5py.File(path, 'w')
-        file.create_dataset('WeightsPack', data=(self.idxs, self.num_elem, self.shape))
-        file.close()
-        
+        NP.savez(path, idxs=self.idxs, num_elem=self.num_elem, shape=self.shape)
+        #file = h5py.File(path, 'w')
+        #file.create_dataset('L_idxs', data=(self.idxs))
+        #file.create_dataset('L_num_elem', data=(self.num_elem))
+        #file.create_dataset('L_shape', data=(self.shape))
+        #file.close()
+
     def load(self, path):
-        file = h5py.File(path, 'w')
-        self.idxs, self.num_elem, self.shape = file['WeightsPack'][:]
-        file.close()
+        data = NP.load(path)
+        self.idxs = data['idxs'].tolist()
+        self.num_elem = data['num_elem'].tolist()
+        self.shape = data['shape'].tolist()
+        #file = h5py.File(path, 'r')
+        #self.idxs  = file['L_idxs'][:]
+        #self.num_elem = file['L_num_elem'][:]
+        #self.shape = file['L_shape'][:]
+        #file.close()
     

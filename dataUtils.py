@@ -6,7 +6,7 @@ import os
 class BouncingMNIST(object):
     def __init__(self, batch_size, image_size, dataset_name, target_name, scale_range=0, run_flag='',
                  clutter_size_min = 5, clutter_size_max = 10, num_clutters = 20, face_intensity_min = 64, 
-                 face_intensity_max = 255, vel=1, buff=True, with_clutters=1, clutter_set='', **kwargs):
+                 face_intensity_max = 255, vel=1, buff=True, with_clutters=True, clutter_set='', **kwargs):
         self.batch_size_ = batch_size
         self.image_size_ = image_size
         self.scale_range = scale_range
@@ -127,8 +127,9 @@ class BouncingMNIST(object):
         label = np.zeros((self.batch_size_, 10))
         
         for j in xrange(self.batch_size_):
-            clutter = self.GetClutter(fake=False)
-            clutter_bg = self.GetClutter(fake=False)
+            if self.with_clutters:
+                clutter = self.GetClutter(fake=False)
+                clutter_bg = self.GetClutter(fake=False)
             for i in xrange(num_digits):
                 ind = self.indices_[self.row_]
                 self.row_ += 1
@@ -146,8 +147,8 @@ class BouncingMNIST(object):
                 scale_factor = np.exp((np.random.random_sample()-0.5)*self.scale_range)
                 scale_image = spn.zoom(digit_image, scale_factor)
                 digit_size_ = digit_size_ * scale_factor 
-                top    =  np.random.randint(0, self.image_size_-digit_size_)
-                left   =  np.random.randint(0, self.image_size_-digit_size_)
+                top    =  np.random.randint(0, max(1, self.image_size_-digit_size_))
+                left   =  np.random.randint(0, max(1, self.image_size_-digit_size_))
                 if digit_size_!=np.shape(scale_image)[0]:
                     digit_size_ = np.shape(scale_image)[0]
                 bottom = top  + digit_size_
@@ -165,7 +166,8 @@ class BouncingMNIST(object):
                 seg[j, int(self.label_[ind]), top:bottom, left:right] = (self.Overlap(
                         seg[j, int(self.label_[ind]), top:bottom, left:right], scale_image)>0).astype('int')
                 label[j, int(self.label_[ind])] = 1
-            data[j, 0] = self.Overlap(data[j, 0], clutter)>0
+            if self.with_clutters:
+                data[j, 0] = self.Overlap(data[j, 0], clutter)
             _EPSI = 1e-6
             for i in xrange(10):
                 seg[j, i] = seg[j, i]/(np.sum(seg[j, i])+_EPSI)
