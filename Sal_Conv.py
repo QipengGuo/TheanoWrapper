@@ -19,21 +19,26 @@ img_tar = T.matrix()
 
 def _step(cur_in):
     
-    conv1_shape = (20, 1, 5, 5, 2, 2)
+    maxpool_shape=(2, 2)
+    
+    conv1_shape = (20, 1, 5, 5, 1, 1)
     conv1_h = model.conv(cur_in = cur_in, name = 'conv1', shape=conv1_shape)
-    conv1_act = T.tanh(conv1_h)
+    pool1 = downsample.max_pool_2d(conv1_h, maxpool_shape, ignore_border = True)
+    conv1_act = T.tanh(pool1)
     if train_flag:
         conv1_act = model.dropout(cur_in = conv1_act, name = 'dropout1', shape=(1, 1), prob=0.5)
     
-    conv2_shape = (50, 20, 5, 5, 2, 2)
+    conv2_shape = (50, 20, 5, 5, 1, 1)
     conv2_h = model.conv(cur_in = conv1_act, name = 'conv2', shape=conv2_shape)
-    conv2_act = T.tanh(conv2_h)
+    pool2 = downsample.max_pool_2d(conv2_h, maxpool_shape, ignore_border = True)
+    conv2_act = T.tanh(pool2)
     if train_flag:
         conv1_act = model.dropout(cur_in = conv1_act, name = 'dropout2', shape=(1, 1), prob=0.5)
     
-    conv3_shape = (50, 50, 5, 5, 2, 2)
+    conv3_shape = (50, 50, 5, 5, 1, 1)
     conv3_h = model.conv(cur_in = conv2_act, name = 'conv3', shape=conv3_shape)
-    conv3_act = T.tanh(conv3_h)
+    pool3 = downsample.max_pool_2d(conv3_h, maxpool_shape, ignore_border = True)
+    conv3_act = T.tanh(pool3)
     if train_flag:
         conv1_act = model.dropout(cur_in = conv1_act, name = 'dropout3', shape=(1, 1), prob=0.5)
     
@@ -61,7 +66,7 @@ for i in xrange(10):
 lr = theano.shared(NP.array((1e-3), dtype=NP.float32))
 iterations = theano.shared(NP.array((0.), dtype=NP.float32))
 
-train_func = theano.function([img_in, img_tar], [cost, img_out], updates=sgd(cost, model.weightsPack.getW_list(), lr=lr, iterations=iterations), allow_input_downcast=True)
+train_func = theano.function([img_in, img_tar, seg_img], [cost, img_out], updates=sgd(cost+cost_sum_sal, model.weightsPack.getW_list(), lr=lr, iterations=iterations), allow_input_downcast=True)
 
 
 train_flag=False
@@ -82,7 +87,7 @@ test_func = theano.function([img_in, img_tar, seg_img], [cost, img_out, cost_sum
 
 
 #training process
-fname = 'fully_conv'
+fname = 'sal_conv'
 train_batch_size = 64
 test_batch_size = 64
 test_his = []

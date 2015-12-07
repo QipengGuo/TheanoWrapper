@@ -6,6 +6,7 @@ import numpy.random as RNG
 #import h5py 
 import dataUtils
 from collections import OrderedDict
+from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 
 ### Utility functions begin
 def get_fans(shape):
@@ -144,7 +145,39 @@ class Model(object):
         conv_h = self.conv2d(cur_in, params[0], subsample=(conv_stride_row, conv_stride_col)) 
 
         return conv_h
- 
+
+    def dropout(self, cur_in=None, name=None, shape=[], prob = 0.0):
+
+        if len(shape)<1 and (name in self.layersPack.keys()):
+            shape = layersPack.get(name)
+
+        retain_prob = 1.0 - prob
+        if name not in self.layersPack.keys():
+            self.layersPack.add(name, shape, ltype='dropout')
+
+        seed = RNG.randint(1e6)
+        rng = RandomStreams(seed=seed)
+        
+        h = cur_in * rng.binomial(cur_in.shape, p=retain_prob, dtype=cur_in.dtype)
+        h /= retain_prob
+        return h
+        
+def sgd(cost, params, lr, iterations, momentum=0.9, decay=0.05):  #lr and iterations must be theano variable
+    grads = theano.grad(cost, params)
+    lr *= (1.0 / (1.0 + decay * iterations))
+
+    updates = []
+
+    updates.append((iterations, iterations + 1.))
+    for p,g in zip(params, grads):
+        m = theano.shared(NP.zeros(p.get_value().shape, dtype=theano.config.floatX))
+        v = momentum * m - lr * g
+        updates.append((m, v))
+
+        new_p = p + momentum * v - lr * g
+        updates.append((p, new_p))
+    return updates
+
 def rmsprop(cost, params, lr=0.0005, rho=0.9, epsilon=1e-6):
     '''
     Borrowed from keras, no constraints, though
@@ -215,7 +248,7 @@ class LayersPack(object):
         self.idxs[name] = self.num_elem
         self.num_elem += 1
         self.shape.append(shape)
-        
+            
     def get(self, name):
         return self.shape[self.idxs[name]]
     
