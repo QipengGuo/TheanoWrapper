@@ -171,7 +171,7 @@ class BouncingMNIST(object):
             _EPSI = 1e-6
             for i in xrange(10):
                 seg[j, i] = seg[j, i]/(np.sum(seg[j, i])+_EPSI)
-            data = data / 255.0
+            data = data / 1.0
         return data, label, seg
 
 
