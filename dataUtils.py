@@ -1,6 +1,6 @@
 import numpy as np
 import h5py
-import scipy.ndimage as spn
+import scipy.misc as misc
 import os
 
 class BouncingMNIST(object):
@@ -145,7 +145,7 @@ class BouncingMNIST(object):
                 bak_digit_image = digit_image 
                 digit_size_ = self.digit_size_
                 scale_factor = np.exp((np.random.random_sample()-0.5)*self.scale_range)
-                scale_image = spn.zoom(digit_image, scale_factor)
+                scale_image = misc.imresize(digit_image, scale_factor)
                 digit_size_ = digit_size_ * scale_factor 
                 top    =  np.random.randint(0, max(1, self.image_size_-digit_size_))
                 left   =  np.random.randint(0, max(1, self.image_size_-digit_size_))
@@ -171,6 +171,7 @@ class BouncingMNIST(object):
             _EPSI = 1e-6
             for i in xrange(10):
                 seg[j, i] = seg[j, i]/(np.sum(seg[j, i])+_EPSI)
+            data = data / 255.0
         return data, label, seg
 
 
