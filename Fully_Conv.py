@@ -8,6 +8,38 @@ import dataUtils
 from collections import OrderedDict
 from Wrapper import Model, rmsprop,  sgd
 from theano.tensor.signal import downsample
+from getopt import *
+import sys
+
+fname = 'fully_conv'
+train_batch_size = 64
+test_batch_size = 64
+test_his = []
+
+train_num_digits = 1
+test_num_digits = 1
+with_clutters = False
+
+
+try:
+	opts, args = getopt(sys.argv[1:], "", ["with_clutters", "train_num=", "test_num="])
+	for opt in opts:
+		if opt[0] == "--with_clutters":
+			with_clutters = True
+                elif opt[0] == "--train_num":
+			train_num_digits = int(opt[1])
+		elif opt[0] == "--test_num":
+			test_num_digits = int(opt[1])
+	if len(args) > 0:
+		fname = args[0]
+except:
+	pass
+
+
+print 'train_num_digits=',train_num_digits
+print 'test_num_digits=',test_num_digits
+print 'file_name=',fname
+print 'with_clutters=',with_clutters
 
 #Network design
 img_shape = (100, 100)
@@ -82,19 +114,14 @@ test_func = theano.function([img_in, img_tar, seg_img], [cost, img_out, cost_sum
 
 
 #training process
-fname = 'fully_conv'
-train_batch_size = 64
-test_batch_size = 64
-test_his = []
-
 from dataUtils import BouncingMNIST
 image_size = 100
-bmnist = BouncingMNIST(train_batch_size, image_size, 'train/inputs', 'train/targets', with_clutters=False, clutter_size_max = 14, scale_range = 0.1)
-bmnist_test = BouncingMNIST(test_batch_size, image_size, 'test/inputs', 'test/targets', with_clutters=False, clutter_size_max = 14, scale_range = 0.1)
+bmnist = BouncingMNIST(train_batch_size, image_size, 'train/inputs', 'train/targets', with_clutters=with_clutters, clutter_size_max = 14, scale_range = 0.1)
+bmnist_test = BouncingMNIST(test_batch_size, image_size, 'test/inputs', 'test/targets', with_clutters=with_clutters, clutter_size_max = 14, scale_range = 0.1)
 for i in xrange(50):
     for j in xrange(1000):
         #data, label, seg=bmnist.GetStaticBatch(num_digits=RNG.randint(5))
-        data, label, seg=bmnist.GetStaticBatch(num_digits=1)
+        data, label, seg=bmnist.GetStaticBatch(num_digits=RNG.randint(train_num_digits)+1)
         n_cost, net_out = train_func(data, label)
         #acc = NP.mean(NP.argmax(net_out, axis=1)==NP.argmax(label, axis=1))
         acc = 1.0*NP.sum(net_out+label>1.5)/NP.sum(net_out+label>0.5)
@@ -102,7 +129,7 @@ for i in xrange(50):
     test_acc = []
     test_sal_cost = []
     for j in xrange(len(bmnist_test.data_)/test_batch_size):
-        data, label, seg=bmnist_test.GetStaticBatch(num_digits=1)
+        data, label, seg=bmnist_test.GetStaticBatch(num_digits=test_num_digits)
         n_cost, net_out, n_sal_cost = test_func(data, label, seg)
         test_sal_cost.append(n_sal_cost)
         test_acc.append(1.0*NP.sum(net_out+label>1.5)/NP.sum(net_out+label>0.5))
