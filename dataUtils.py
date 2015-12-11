@@ -32,7 +32,7 @@ class BouncingMNIST(object):
         self.face_intensity_max = face_intensity_max
         self.vel_scale = vel
         np.random.shuffle(self.indices_)
-        self.num_clutterPack = 100
+        self.num_clutterPack = 10000
         self.clutter_set = clutter_set
         self.clutterpack_exists=  os.path.exists('ClutterPackLarge'+clutter_set+'.hdf5')
         if not self.clutterpack_exists:
@@ -128,8 +128,8 @@ class BouncingMNIST(object):
         
         for j in xrange(self.batch_size_):
             if self.with_clutters:
-                clutter = self.GetClutter(fake=False)
-                clutter_bg = self.GetClutter(fake=False)
+                clutter = self.GetClutter(fake=True)
+                clutter_bg = self.GetClutter(fake=True)
             for i in xrange(num_digits):
                 ind = self.indices_[self.row_]
                 self.row_ += 1

@@ -73,9 +73,10 @@ def _step(cur_in):
     if train_flag:
         conv3_act = model.dropout(cur_in = conv3_act, name = 'dropout3', shape=(1, 1), prob=0.25)
     
-    fc1 = NN.sigmoid(model.fc(cur_in = conv3_act.flatten(2), name = 'fc1', shape=(4050, out_dim)))
+    fc1 = NN.sigmoid(model.fc(cur_in = conv3_act.flatten(2), name = 'fc1', shape=(4050, 128)))
+    fc2 = NN.sigmoid(model.fc(cur_in = fc1, name='fc2', shape=(128,out_dim)))
     #fc1 = NN.softmax(model.fc(cur_in = conv2_act.flatten(2), name = 'fc1', shape=(24200, out_dim)))
-    return fc1
+    return fc2
 
 
 _EPSI = 1e-6
