@@ -9,7 +9,7 @@ from Wrapper import Model, rmsprop
 from getopt import *
 import sys
 
-fname = 'apr_W'
+fname = 'apr_W_big'
 train_batch_size = 16
 test_batch_size = 32
 test_his = []
@@ -40,11 +40,11 @@ def _step(cur_in, trash, prev_h1):
     return fc1, gru1
 _word_seq = word_seq.dimshuffle(1, 0, 2)
 #sc, _ = theano.scan(_step, sequences=[_word_seq], outputs_info=[starts, T.zeros((word_seq.shape[0], 200)), T.zeros((word_seq.shape[0], 200)), T.zeros((word_seq.shape[0], 200))], truncate_gradient=200)
-sc, _ = theano.scan(_step, sequences=[_word_seq], outputs_info=[starts, T.zeros((word_seq.shape[0], 256))], truncate_gradient=200)
+sc, _ = theano.scan(_step, sequences=[_word_seq], outputs_info=[starts, T.zeros((word_seq.shape[0], 256))], truncate_gradient=-1)
 word_out = sc[0].dimshuffle(1, 0, 2)
 
 EPSI = 1e-6
-cost = T.mean(NN.categorical_crossentropy(T.clip(word_out, EPSI, 1.0-EPSI), label_seq))
+cost = T.sum(NN.categorical_crossentropy(T.clip(word_out, EPSI, 1.0-EPSI), label_seq))
 test_func = theano.function([word_seq, label_seq, starts], [cost, word_out], allow_input_downcast=True)
 train_func = theano.function([word_seq, label_seq, starts], [cost, word_out], updates=rmsprop(cost, model.weightsPack.getW_list(), lr=1e-2, epsilon=1e-4), allow_input_downcast=True)
 
@@ -60,9 +60,7 @@ for i in xrange(50):
         acc = 1.0 * NP.sum((NP.argmax(net_out, 2)==NP.argmax(label, 2)).astype('int')+(NP.any(label>0, axis=-1)).astype('int')>1)/NP.sum(NP.any(label>0, axis=-1))
         per = 1.0 * NP.mean(NP.sum(-1.0*label*NP.log(net_out+EPSI), axis=(1, 2))/n_len)
         print 'Epoch = ', str(i), ' Batch = ', str(j), ' Cost = ', n_cost, ' ACC = ', acc, ' Per = ', per, ' Sent Len = ', NP.mean(n_len)
-
-    NP.savez('apr_train_show.npz', label=label, predict=net_out)
-
+ 
     test_acc = []
     test_per = []
     for j in xrange(amazon_data.test_size/test_batch_size):
@@ -74,6 +72,7 @@ for i in xrange(50):
         test_acc.append(acc)
         test_per.append(per)
     print '\nEpoch = ', str(i), ' Test Acc = ', NP.mean(NP.asarray(test_acc)), ' Test Per = ', NP.mean(NP.asarray(test_per))
+    NP.savez('apr_test_show.npz', label=label, predict=net_out)
     test_his.append(NP.mean(NP.asarray(test_per)))
     model.save(fname)
 model.save(fname)

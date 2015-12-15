@@ -3,6 +3,11 @@ import gzip
 import os
 import re
 import numpy as NP
+
+def shuffle_union(a, b):
+	p = np.random.permutation(len(a))
+	return a[p], b[p]
+
 class Amazon_data(object):
 	def __init__(self, apr_name, en_list_name, cache=False):
                 if cache and os.path.exists('token.npz'):
@@ -17,10 +22,10 @@ class Amazon_data(object):
 		        self.read_json(apr_name)
                         NP.savez('token.npz', data=self.emb_data, label=self.emb_label, vocab_map = self.vocab_map)
                 self.idx = 0
-                self.max_vocab = 20000
+                self.max_vocab = 50000
                 self.t_idx = 0
                 self.vocab_size = min(self.max_vocab, NP.max(self.emb_data)+1)
-                self.test_size = 2000
+                self.test_size = 1000
                 self.test_emb_data = self.emb_data[-self.test_size:]
                 self.test_emb_label = self.emb_label[-self.test_size:]
                 self.emb_data = self.emb_data[:-self.test_size]
@@ -45,6 +50,7 @@ class Amazon_data(object):
                         else:
 			        data = NP.concatenate((self.emb_data[st:], self.emb_data[:ed-l]), axis=0)
                                 label = NP.concatenate((self.emb_label[st:], self.emb_label[:ed-l]), axis=0)
+                                self.emb_data, self.emb_label = shuffle_union(self.emb_data, self.emb_label)
                                 return data, label, NP.argmin(data, axis=1)
                                 
 		else:
@@ -75,7 +81,7 @@ class Amazon_data(object):
 			yield eval(l)['reviewText']
 
 	def read_json(self, filename):
-		max_items = 1e4
+		max_items = 1e5
                 max_time = 200
 		slist = self.json_parse(filename)
 		cnt=0
@@ -111,7 +117,8 @@ class Amazon_data(object):
 				num_W += 1
                                 if num_W >= max_time:
                                     break
-                                flag =w.lower() in ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', ',', '.', ':', '!', '#', '%', ';', '?', '(', ')'] or w.lower()+'\n' in self.en_list
+                                w = w.lower()
+                                flag =w in ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', ',', '.', ':', '!', '#', '%', ';', '?', '(', ')', '`'] or w+'\n' in self.en_list
                                 #print w, ' Has = ', flag
                                 if flag:
 					if w not in vocab_map.keys():
