@@ -84,3 +84,64 @@ for i in xrange(50):
 model.save(fname)
 NP.savez(fname+'_result.npz', test_his = test_his)
 ```
+
+#Conv network
+```python
+...
+from Wrapper import Model, rmsprop
+from theano.tensor.signal import downsample
+
+...
+#Mnist handwriting recognition 
+#Network design
+img_shape = (100, 100)
+out_dim = 10
+model = Model()
+img_in = T.tensor4()
+seg_img = T.tensor4()
+img_tar = T.matrix()
+
+def _step(cur_in):
+    
+    maxpool_shape=(2, 2)
+    
+    conv1_shape = (20, 1, 5, 5, 1, 1)
+    conv1_h = model.conv(cur_in = cur_in, name = 'conv1', shape=conv1_shape)
+    pool1 = downsample.max_pool_2d(conv1_h, maxpool_shape, ignore_border = True)
+    conv1_act = T.tanh(pool1)
+    
+    conv2_shape = (50, 20, 5, 5, 1, 1)
+    conv2_h = model.conv(cur_in = conv1_act, name = 'conv2', shape=conv2_shape)
+    pool2 = downsample.max_pool_2d(conv2_h, maxpool_shape, ignore_border = True)
+    conv2_act = T.tanh(pool2)
+    
+    conv3_shape = (50, 50, 5, 5, 1, 1)
+    conv3_h = model.conv(cur_in = conv2_act, name = 'conv3', shape=conv3_shape)
+    pool3 = downsample.max_pool_2d(conv3_h, maxpool_shape, ignore_border = True)
+    conv3_act = T.tanh(pool3)
+    if train_flag:
+        conv3_act = model.dropout(cur_in = conv3_act, name = 'dropout3', shape=(1, 1), prob=0.25)
+    
+    fc1 = NN.sigmoid(model.fc(cur_in = conv3_act.flatten(2), name = 'fc1', shape=(4050, 128)))
+    fc2 = NN.softmax(model.fc(cur_in = fc1, name='fc2', shape=(128,out_dim)))
+    
+    return fc2
+
+
+_EPSI = 1e-6
+MAX_V = 20
+
+train_flag=True
+img_out = _step(img_in)
+cost = T.mean(NN.categorical_crossentropy(T.clip(img_out, _EPSI, 1.0 - _EPSI), img_tar))
+
+train_func = theano.function([img_in, img_tar], [cost, img_out], updates=rmsprop(cost, model.weightsPack.getW_list()), allow_input_downcast=True)
+
+
+train_flag=False
+img_out = _step(img_in)
+cost = T.mean(NN.categorical_crossentropy(T.clip(img_out, _EPSI, 1.0 - _EPSI), img_tar)) 
+
+test_func = theano.function([img_in, img_tar], [cost, img_out], allow_input_downcast=True)
+#Network end
+```
