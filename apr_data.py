@@ -25,6 +25,7 @@ class Amazon_data(object):
                 self.max_vocab = 50000
                 self.t_idx = 0
                 self.vocab_size = min(self.max_vocab, NP.max(self.emb_data)+1)
+                print self.vocab_size
                 self.test_size = 1000
                 self.test_emb_data = self.emb_data[-self.test_size:]
                 self.test_emb_label = self.emb_label[-self.test_size:]
@@ -81,7 +82,7 @@ class Amazon_data(object):
 			yield eval(l)['reviewText']
 
 	def read_json(self, filename):
-		max_items = 1e5
+		max_items = 1e6
                 max_time = 200
 		slist = self.json_parse(filename)
 		cnt=0
@@ -118,7 +119,7 @@ class Amazon_data(object):
                                 if num_W >= max_time:
                                     break
                                 w = w.lower()
-                                flag =w in ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', ',', '.', ':', '!', '#', '%', ';', '?', '(', ')', '`'] or w+'\n' in self.en_list
+                                flag =w in ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', ',', '.', ':', '!', '#', '%', ';', '?', '(', ')', '`', '-', '+', '=', '/', '$', '@', '^', '&', '*', '[', ']', '{', '}', '<', '>', '~'] or w+'\n' in self.en_list
                                 #print w, ' Has = ', flag
                                 if flag:
 					if w not in vocab_map.keys():

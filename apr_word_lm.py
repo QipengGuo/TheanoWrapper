@@ -9,7 +9,7 @@ from Wrapper import Model, rmsprop
 from getopt import *
 import sys
 
-fname = 'apr_W_big'
+fname = 'apr_W_1M'
 train_batch_size = 16
 test_batch_size = 32
 test_his = []
@@ -29,18 +29,18 @@ def get_mask(cur_in, mask_value=0.):
     return T.shape_padright(T.any((1. - T.eq(cur_in, mask_value)), axis=-1))
 def masked(cur_in, mask):
     return cur_in * mask
-def _step(cur_in, trash, prev_h1):
+def _step(cur_in, trash, prev_h1, prev_h2, prev_h3):
     mask = get_mask(cur_in)
-    gru1 = masked(model.gru(cur_in = cur_in, rec_in = prev_h1, name = 'gru1', shape = (in_dim, 256)), mask)
-    #gru2 = masked(model.gru(cur_in = gru1, rec_in = prev_h2, name = 'gru2', shape = (200, 200)), mask)
-    #gru3 = masked(model.gru(cur_in = gru2, rec_in = prev_h3, name = 'gru3', shape = (200, 200)), mask)
+    gru1 = masked(model.gru(cur_in = cur_in, rec_in = prev_h1, name = 'gru1', shape = (in_dim, 200)), mask)
+    gru2 = masked(model.gru(cur_in = gru1, rec_in = prev_h2, name = 'gru2', shape = (200, 200)), mask)
+    gru3 = masked(model.gru(cur_in = gru2, rec_in = prev_h3, name = 'gru3', shape = (200, 200)), mask)
 
-    fc1 = masked(NN.softmax(model.fc(cur_in = gru1, name = 'fc1', shape = (256, out_dim))), mask)
+    fc1 = masked(NN.softmax(model.fc(cur_in = gru3, name = 'fc1', shape = (200, out_dim))), mask)
 
-    return fc1, gru1
+    return fc1, gru1, gru2, gru3
 _word_seq = word_seq.dimshuffle(1, 0, 2)
-#sc, _ = theano.scan(_step, sequences=[_word_seq], outputs_info=[starts, T.zeros((word_seq.shape[0], 200)), T.zeros((word_seq.shape[0], 200)), T.zeros((word_seq.shape[0], 200))], truncate_gradient=200)
-sc, _ = theano.scan(_step, sequences=[_word_seq], outputs_info=[starts, T.zeros((word_seq.shape[0], 256))], truncate_gradient=-1)
+sc, _ = theano.scan(_step, sequences=[_word_seq], outputs_info=[starts, T.zeros((word_seq.shape[0], 200)), T.zeros((word_seq.shape[0], 200)), T.zeros((word_seq.shape[0], 200))], truncate_gradient=-1)
+#sc, _ = theano.scan(_step, sequences=[_word_seq], outputs_info=[starts, T.zeros((word_seq.shape[0], 256))], truncate_gradient=-1)
 word_out = sc[0].dimshuffle(1, 0, 2)
 
 EPSI = 1e-6
@@ -74,7 +74,7 @@ for i in xrange(50):
     print '\nEpoch = ', str(i), ' Test Acc = ', NP.mean(NP.asarray(test_acc)), ' Test Per = ', NP.mean(NP.asarray(test_per))
     NP.savez('apr_test_show.npz', label=label, predict=net_out)
     test_his.append(NP.mean(NP.asarray(test_per)))
-    model.save(fname)
+    model.save(fname+'_'+str(i))
 model.save(fname)
 NP.savez(fname+'_result.npz', test_his = test_his)
 
