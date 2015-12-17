@@ -36,6 +36,16 @@ def orthogonal(shape, scale=1.1):
     q = q.reshape(shape)
     return NP.cast[T.config.floatX](q)
 
+#batched dot for tensor3
+def batched_dot3(A, B):
+	C = A.dimshuffle([0, 1, 2, 'x']) * B.dimshuffle([0, 'x', 1, 2])
+	return C.sum(axis=-2)
+
+#batched dot for tensor4
+def batched_dot4(A, B):
+	C = A.dimshuffle([0, 1, 2, 3, 'x']) * B.dimshuffle([0, 1, 'x', 2, 3])
+	return C.sum(axis=-2)
+
 class Model(object):
     def __init__(self):
         self.weightsPack = WeightsPack()
@@ -121,6 +131,37 @@ class Model(object):
         fc_h = T.dot(cur_in, params[0])+params[1]
 
         return fc_h
+
+
+	def att_mem(self, cur_in = None, mem_in = None, name = None, shape=[], tick= None):
+		if len(shape)<1 and (name in self.layersPack.keys()):
+			shape = layersPack.get(name)
+
+		cur_dim, rec_dim = shape
+		h_dim = rec_dim
+		params = [None]*3
+		Wname_list = [name+'_W', name+'_U', name+'_V']
+		if name not in self.layersPack.keys():
+			#W
+			params[0] = theano.shared(glorot_uniform((cur_dim, h_dim)), name='W_att')
+			#U
+			params[1] = theano.shared(orthogonal((rec_dim, h_dim)), name='U_att')
+			#V
+			params[2] = theano.shared(glorot_uniform((1, h_dim)), name='V_att')
+			
+			self.weightsPack.add_list(params, Wname_list)
+
+			self.layersPack.add(name, shape, ltype='att_mem')
+		else:
+			for i in xrange(len(Wname_list)):
+				params[i] = self.weightsPack.get(Wname_list[i])
+
+		#time, batch, channel, 1
+		mem = mem_in[:tick].dimshuffle([0, 1, 2, 'x'])
+
+		Wx_Uh = T.dot(cur_in, params[0]).dimshuffle(['x', 0, 1, 'x']) + batched_dot4(mem, params[0].dimshuffle(['x', 'x', 0, 1]))
+		att = batched_dot4(params[2].dimshuffle(['x', 'x', 0, 1]), T.tanh(Wx_Uh)).reshape(cur_dim.shape[0], tick)
+		return NN.softmax(att)
 
     def conv(self, cur_in=None, name=None, shape=[]):
         if len(shape)<1 and (name in self.layersPack.keys()):
