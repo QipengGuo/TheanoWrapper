@@ -1,7 +1,7 @@
 import numpy as NP
 from apr_data import *
 
-f = NP.load('apr_test_show.npz')
+f = NP.load('att_rnn_test_show.npz')
 label = f['label']
 predict = f['predict']
 apr = Amazon_data('', '', cache=True)
