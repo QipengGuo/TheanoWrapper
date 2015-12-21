@@ -25,7 +25,7 @@ time_step = theano.shared(NP.zeros([], dtype='int'))
 
 max_time = 250
 #mem_bank time, batch, channels
-mem_bank = theano.shared(NP.zeros((1, train_batch_size, 256), dtype=theano.config.floatX))
+mem_bank = theano.shared(NP.zeros((max_time, train_batch_size, 256), dtype=theano.config.floatX))
 #mem_bank = T.zeros((1,word_seq.shape[0],200))
 model = Model()
 
@@ -43,7 +43,7 @@ def batched_dot(A, B):
                 
 def get_mask(cur_in, mask_value=0.):
     return T.shape_padright(T.any((1. - T.eq(cur_in, mask_value)), axis=-1))
-'''
+
 def _step(cur_in, trash):
         updates=OrderedDict()
         updates[time_step] = (time_step+1) % max_time
@@ -65,42 +65,18 @@ def _step(cur_in, trash):
         #updates.append((mem_bank, new_mem_bank))
         updates[mem_bank]=new_mem_bank
         return fc2, updates
-'''
-def _step(seq_in):
-	result = T.zeros((1, seq_in.shape[1], out_dim))
-	for tick in xrange(max_time):
-		mask = get_mask(seq_in[tick])
-		fc1 = mask * T.tanh(model.fc(cur_in = seq_in[tick], name='fc1', shape=(in_dim, 200)))
-		att = model.att_mem(cur_in = fc1, mem_in = mem_bank, name = 'att1', shape= (200, 256), tick=tick)
-		
-    rec_in1 = batched_dot(mem_bank[:tick+1].dimshuffle([1, 2, 0]), att.dimshuffle([1, 0, 'x']))
-    rec_in1 = T.extra_ops.squeeze(T.patternbroadcast(rec_in1, (False, False, True)))
-    gru1 = mask * model.gru(cur_in = fc1, rec_in = rec_in1, name = 'gru1', shape = (200, 256))
-    #gru2 = masked(model.gru(cur_in = gru1, rec_in = prev_h2, name = 'gru2', shape = (200, 200)), mask)
-    #gru3 = masked(model.gru(cur_in = gru2, rec_in = prev_h3, name = 'gru3', shape = (200, 200)), mask)
 
-    fc2 = mask * NN.softmax(model.fc(cur_in = gru1, name = 'fc2', shape = (256, out_dim)))
-
-    mem_bank = T.concatenate((mem_bank, gru1.dimshuffle(['x', 0, 1])), axis=0)
-    result = T.concatenate((fc2.dimshuffle(['x', 0, 1])), axis=0)
-  return result[1:]
-    
 _word_seq = word_seq.dimshuffle(1, 0, 2)
-'''
 #sc, _ = theano.scan(_step, sequences=[_word_seq], outputs_info=[starts, T.zeros((word_seq.shape[0], 200)), T.zeros((word_seq.shape[0], 200)), T.zeros((word_seq.shape[0], 200))], truncate_gradient=200)
 sc, sc_updates = theano.scan(_step, sequences=[_word_seq], outputs_info=[starts])
-'''
-sc = _step(_word_seq)
 word_out = sc.dimshuffle(1, 0, 2)
 
 EPSI = 1e-6
 cost = T.sum(NN.categorical_crossentropy(T.clip(word_out, EPSI, 1.0-EPSI), label_seq))
-#test_func = theano.function([word_seq, label_seq, starts], [cost, word_out], updates=sc_updates, allow_input_downcast=True)
-test_func = theano.function([word_seq, label_seq, starts], [cost, word_out], allow_input_downcast=True)
+test_func = theano.function([word_seq, label_seq, starts], [cost, word_out], updates=sc_updates, allow_input_downcast=True)
 grad = rmsprop(cost, model.weightsPack.getW_list(), lr=1e-2, epsilon=1e-4)
-#train_func = theano.function([word_seq, label_seq, starts], [cost, word_out], updates=merge_OD(sc_updates,grad), allow_input_downcast=True)
-train_func = theano.function([word_seq, label_seq, starts], [cost, word_out], updates=grad, allow_input_downcast=True)
-
+train_func = theano.function([word_seq, label_seq, starts], [cost, word_out], updates=merge_OD(sc_updates,grad), allow_input_downcast=True)
+#train_func = theano.function([word_seq, label_seq, starts], [cost, word_out], updates=merge_OD(grad, OrderedDict()), allow_input_downcast=True)
 
 for i in xrange(50):
     if i == 0:
