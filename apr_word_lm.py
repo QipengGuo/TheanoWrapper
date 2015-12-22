@@ -52,7 +52,7 @@ for i in xrange(50):
     if i == 0:
         data, label, n_len = amazon_data.get_batch(train_batch_size)
         n_cost, net_out = test_func(data, label, NP.zeros((train_batch_size, len(data[0][0]))))
-        NP.savez('apr_first_show.npz', label=label, predict=net_out)
+        NP.savez(fname+'_first_show.npz', label=label, predict=net_out)
     for j in xrange(200):
         data, label, n_len = amazon_data.get_batch(train_batch_size)
         #data = NP.zeros((train_batch_size, len(data[0]), len(data[0][0])))
@@ -72,7 +72,7 @@ for i in xrange(50):
         test_acc.append(acc)
         test_per.append(per)
     print '\nEpoch = ', str(i), ' Test Acc = ', NP.mean(NP.asarray(test_acc)), ' Test Per = ', NP.mean(NP.asarray(test_per))
-    NP.savez('apr_test_show.npz', label=label, predict=net_out)
+    NP.savez(fname+'_test_show.npz', label=label, predict=net_out)
     test_his.append(NP.mean(NP.asarray(test_per)))
     model.save(fname+'_'+str(i))
 model.save(fname)

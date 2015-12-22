@@ -5,7 +5,7 @@ import re
 import numpy as NP
 
 def shuffle_union(a, b):
-	p = np.random.permutation(len(a))
+	p = NP.random.permutation(len(a))
 	return a[p], b[p]
 
 class Amazon_data(object):
