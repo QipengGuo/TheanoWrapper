@@ -46,6 +46,18 @@ def batched_dot4(A, B):
 	C = A.dimshuffle([0, 1, 2, 3, 'x']) * B.dimshuffle([0, 1, 'x', 2, 3])
 	return C.sum(axis=-2)
 
+class Dropout(object):
+	def __init__(self, shape = None, prob=0.5):
+		self.seed = RNG.randint(1e6)
+		self.retain_prob = 1.0 - prob
+		self.rng = RandomStreams(seed=self.seed)
+		self.mask = self.rng.binomial(shape, p=self.retain_prob)
+
+	def drop(self, cur_in):
+		h = cur_in * self.mask
+		h /= self.retain_prob
+		return h
+
 class Model(object):
     def __init__(self):
         self.weightsPack = WeightsPack()
@@ -187,22 +199,6 @@ class Model(object):
         conv_h = self.conv2d(cur_in, params[0], subsample=(conv_stride_row, conv_stride_col)) 
 
         return conv_h
-
-    def dropout(self, cur_in=None, name=None, shape=[], prob = 0.0):
-
-        if len(shape)<1 and (name in self.layersPack.keys()):
-            shape = layersPack.get(name)
-
-        retain_prob = 1.0 - prob
-        if name not in self.layersPack.keys():
-            self.layersPack.add(name, shape, ltype='dropout')
-
-        seed = RNG.randint(1e6)
-        rng = RandomStreams(seed=seed)
-        
-        h = cur_in * rng.binomial(cur_in.shape, p=retain_prob, dtype=cur_in.dtype)
-        h /= retain_prob
-        return h
         
 def sgd(cost, params, lr, iterations, momentum=0.9, decay=0.05):  #lr and iterations must be theano variable
     grads = theano.grad(cost, params)
