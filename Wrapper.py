@@ -46,6 +46,18 @@ def batched_dot4(A, B):
 	C = A.dimshuffle([0, 1, 2, 3, 'x']) * B.dimshuffle([0, 1, 'x', 2, 3])
 	return C.sum(axis=-2)
 
+def auto_batch(func, batch_size, *args):
+	result = []
+	targs = [None]*len(args)
+	for i in xrange(len(args[0])/batch_size):
+		for j in xrange(len(args)):
+			targs[j] = args[j][i*batch_size:(i+1)*batch_size]
+		t = func(*targs)
+		result.append(t)
+	return NP.concatenate(result, axis=1)
+
+### Utility functions end
+
 class Dropout(object):
 	def __init__(self, shape = None, prob=0.5):
 		self.seed = RNG.randint(1e6)
