@@ -46,14 +46,35 @@ def batched_dot4(A, B):
 	return C.sum(axis=-2)
 
 def auto_batch(func, batch_size, *args):
-	result = []
-	targs = [None]*len(args)
-	for i in xrange(len(args[0])/batch_size):
-		for j in xrange(len(args)):
-			targs[j] = args[j][i*batch_size:(i+1)*batch_size]
-		t = func(*targs)
-		result.append(t)
-	return NP.concatenate(result, axis=1)
+    result = []
+    t=None
+    targs = [None]*len(args)
+    for i in xrange(len(args[0])/batch_size):
+        for j in xrange(len(args)):
+            targs[j] = args[j][i*batch_size:(i+1)*batch_size]
+        t = func(*targs)
+        if len(t)>1:
+            if i==0:
+                result = [None]*len(t)
+                for j in xrange(len(t)):
+                    result[j] = []
+            for j in xrange(len(t)):
+                result[j].append(t[j])
+        else:
+            result.append(t)
+    if len(t)>1:
+        for i in xrange(len(t)):
+            result[i]=NP.asarray(result[i])
+            if result[i].ndim>1:
+                result[i] = NP.concatenate(result[i], axis=0)
+        return result
+    else:
+        result = NP.asarray(result)
+        if result.ndim>1:
+            return NP.concatenate(result, axis=0)
+        else:
+            return result
+    return None
 
 ### Utility functions end
 
