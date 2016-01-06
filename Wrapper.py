@@ -4,7 +4,6 @@ import theano.tensor.nnet as NN
 import numpy as NP
 import numpy.random as RNG
 #import h5py 
-import dataUtils
 from collections import OrderedDict
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 
