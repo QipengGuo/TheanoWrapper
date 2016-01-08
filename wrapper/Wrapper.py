@@ -53,7 +53,7 @@ def auto_batch(func, batch_size, *args):
         for j in xrange(len(args)):
             targs[j] = args[j][i*batch_size:(i+1)*batch_size]
         t = func(*targs)
-        if len(t)>1:
+        if len(t)>1 and not isinstance(t, NP.ndarray):
             if i==0:
                 result = [None]*len(t)
                 for j in xrange(len(t)):
@@ -62,7 +62,7 @@ def auto_batch(func, batch_size, *args):
                 result[j].append(t[j])
         else:
             result.append(t)
-    if len(t)>1:
+    if len(t)>1 and not isinstance(t, NP.ndarray):
         for i in xrange(len(t)):
             result[i]=NP.asarray(result[i])
             if isinstance(result[i][0], (list, tuple, NP.ndarray)):
