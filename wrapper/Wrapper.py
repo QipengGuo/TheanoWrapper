@@ -52,6 +52,8 @@ def auto_batch(func, batch_size, *args):
     for i in xrange(len(args[0])/batch_size+1):
         for j in xrange(len(args)):
             targs[j] = args[j][i*batch_size:(i+1)*batch_size]
+        if i*batch_size>=len(args[0]):
+            break
         t = func(*targs)
         if len(t)>1 and not isinstance(t, NP.ndarray):
             if i==0:
@@ -112,6 +114,49 @@ class Model(object):
     def clear(self):
         self.weightsPack = WeightsPack()
         self.layersPack = LayersPack()
+
+    def lstm(self, cur_in=None, rec_in=None, rec_mem = None, name=None, shape=[]):  
+        if len(shape)<1 and (name in self.layersPack.keys()):
+            shape = layersPack.get(name)
+
+        in_dim, out_dim = shape
+        params = [None]*12
+        Wname_list = [name+'_W_h', name+'_U_h', name+'_b_h',name+'_W_i', name+'_U_i', name+'_b_i', name+'_W_o', name+'_U_o', name+'_b_o', name+'_W_f', name+'_U_f', name+'_b_f']
+        if name not in self.layersPack.keys():
+            #W_h, U_h, b_h
+            params[0] = theano.shared(glorot_uniform((in_dim, out_dim)), name = 'W_h')
+            params[1] = theano.shared(orthogonal((out_dim, out_dim)), name = 'U_h')
+            params[2] = theano.shared(NP.zeros((out_dim,), dtype=theano.config.floatX), name='b_h')
+            #W_i, U_i, b_i
+            params[3] = theano.shared(glorot_uniform((in_dim, out_dim)), name = 'W_i')
+            params[4] = theano.shared(orthogonal((out_dim, out_dim)), name = 'U_i')
+            params[5] = theano.shared(NP.zeros((out_dim,), dtype=theano.config.floatX), name='b_i')
+            #W_o, U_o, b_o
+            params[6] = theano.shared(glorot_uniform((in_dim, out_dim)), name = 'W_o')
+            params[7] = theano.shared(orthogonal((out_dim, out_dim)), name = 'U_o')
+            params[8] = theano.shared(NP.zeros((out_dim,), dtype=theano.config.floatX), name='b_o')
+            #W_f, U_f, b_f
+            params[9] = theano.shared(glorot_uniform((in_dim, out_dim)), name = 'W_f')
+            params[10] = theano.shared(orthogonal((out_dim, out_dim)), name = 'U_f')
+            params[11] = theano.shared(NP.zeros((out_dim,), dtype=theano.config.floatX), name='b_f')
+
+            #add W to weights pack
+            self.weightsPack.add_list(params, Wname_list)
+
+            #add gru to layers pack
+            self.layersPack.add(name, shape, ltype='lstm')
+        else:
+            for i in xrange(len(Wname_list)):
+                params[i] = self.weightsPack.get(Wname_list[i])
+
+	_h_t = T.tanh(T.dot(cur_in, params[0]) + T.dot(rec_in, params[1]) + params[2])
+	i_t = NN.sigmoid(T.dot(cur_in, params[3]) + T.dot(rec_in, params[4]) + params[5])
+	o_t = NN.sigmoid(T.dot(cur_in, params[6]) + T.dot(rec_in, params[7]) + params[8])
+	f_t = NN.sigmoid(T.dot(cur_in, params[9]) + T.dot(rec_in, params[10]) + params[11]) 
+        c_t = i_t * _h_t + f_t * rec_mem
+	lstm_t = T.tanh(c_t) * o_t
+
+        return lstm_t, c_t
 
     def gru(self, cur_in=None, rec_in=None, name=None, shape=[]):  
         if len(shape)<1 and (name in self.layersPack.keys()):
@@ -202,11 +247,15 @@ class Model(object):
 
             #time, batch, channel, 1
             mem = mem_in[:tick+1].dimshuffle([0, 1, 2, 'x'])
-
             Wx_Uh = T.dot(cur_in, params[0]).dimshuffle(['x', 0, 1, 'x']) + batched_dot4(params[1].dimshuffle(['x', 'x', 0, 1]), mem)
-            att = batched_dot4(params[2].dimshuffle(['x', 'x', 0, 1]), T.tanh(Wx_Uh))
-            att = T.extra_ops.squeeze(T.patternbroadcast(att, (False,False,True,True)))
-            return NN.softmax(att)
+            v_t = T.switch(params[2]>=0, params[2], -params[2])
+            v_t = v_t / T.sum(v_t)
+            att = batched_dot4(T.switch(params[2]>=0, params[2], -params[2]).dimshuffle(['x', 'x', 0, 1]), NN.sigmoid(Wx_Uh))
+            #att = NN.sigmoid(Wx_Uh)
+            #att = T.extra_ops.squeeze(T.patternbroadcast(att, (False,False,True,True)))
+            att = att[:,:,0,0] * 1e2
+            return (NN.softmax(att.transpose())).transpose()
+            #return att
 
     def conv(self, cur_in=None, name=None, shape=[]):
         if len(shape)<1 and (name in self.layersPack.keys()):

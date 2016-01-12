@@ -20,7 +20,6 @@ label_seq = T.tensor3()
 in_dim = amazon_data.vocab_size
 out_dim = amazon_data.vocab_size
 starts = T.matrix()
-time_step = theano.shared(NP.zeros([], dtype='int'))
 #time_step = T.zeros([], dtype='int')
 
 max_time = 199
@@ -43,57 +42,35 @@ def batched_dot(A, B):
                 
 def get_mask(cur_in, mask_value=0.):
     return T.shape_padright(T.any((1. - T.eq(cur_in, mask_value)), axis=-1))
-'''
-def _step(cur_in, trash):
-        updates=OrderedDict()
-        updates[time_step] = (time_step+1) % max_time
-        #updates.append((time_step, time_step+1))
-        mask = get_mask(cur_in)
-        fc1 = mask * T.tanh(model.fc(cur_in = cur_in, name = 'fc1', shape =(in_dim, 200)))
-        att = model.att_mem(cur_in = fc1, mem_in = mem_bank, name = 'att1', shape = (200, 256), tick=time_step)
 
-        rec_in1 = batched_dot(mem_bank[:time_step+1].dimshuffle([1, 2, 0]), att.dimshuffle([1, 0, 'x']))
-        rec_in1 = T.extra_ops.squeeze(T.patternbroadcast(rec_in1, (False, False, True)))
-        gru1 = mask * model.gru(cur_in = fc1, rec_in = rec_in1, name = 'gru1', shape = (200, 256))
-        #gru2 = masked(model.gru(cur_in = gru1, rec_in = prev_h2, name = 'gru2', shape = (200, 200)), mask)
-        #gru3 = masked(model.gru(cur_in = gru2, rec_in = prev_h3, name = 'gru3', shape = (200, 200)), mask)
-
-        fc2 = mask * NN.softmax(model.fc(cur_in = gru1, name = 'fc2', shape = (256, out_dim)))
-
-        new_mem_bank = T.set_subtensor(mem_bank[time_step], gru1)
-        #new_mem_bank = T.concatenate((mem_bank, gru1.dimshuffle(['x', 0, 1])), axis=0)
-        #updates.append((mem_bank, new_mem_bank))
-        updates[mem_bank]=new_mem_bank
-        return fc2, updates
-'''
-def _step(cur_in, tick, trash, mem):
+def _step(cur_in, tick, trash, mem, trash1):
     mask = get_mask(cur_in)
-    fc1 = mask * T.tanh(model.fc(cur_in = cur_in, name = 'fc1', shape =(in_dim, 200)))
-    att = model.att_mem(cur_in = fc1, mem_in = mem_bank, name = 'att1', shape = (200, 256), tick=tick)
+    fc1 = mask * T.tanh(model.fc(cur_in = cur_in, name = 'fc1', shape =(in_dim, mem_vec)))
+    att = model.att_mem(cur_in = fc1, mem_in = mem, name = 'att1', shape = (mem_vec, mem_vec), tick=tick)
 
-    rec_in1 = batched_dot(mem_bank[:tick+1].dimshuffle([1, 2, 0]), att.dimshuffle([1, 0, 'x']))
-    rec_in1 = T.extra_ops.squeeze(T.patternbroadcast(rec_in1, (False, False, True)))
-    gru1 = mask * model.gru(cur_in = fc1, rec_in = rec_in1, name = 'gru1', shape = (200, 256))
+    #rec_in1 = batched_dot(mem_bank[:tick+1].dimshuffle([1, 2, 0]), att.dimshuffle([1, 0, 'x']))
+    #rec_in1 = T.extra_ops.squeeze(T.patternbroadcast(rec_in1, (False, False, True)))
+    rec_in1 = T.sum(mem[:tick+1].dimshuffle([1,0,2]) * att.dimshuffle([1, 0, 'x']), axis=1)
+    
+    gru1 = mask * model.gru(cur_in = fc1, rec_in = rec_in1, name = 'gru1', shape = (mem_vec, mem_vec))
     #gru2 = masked(model.gru(cur_in = gru1, rec_in = prev_h2, name = 'gru2', shape = (200, 200)), mask)
     #gru3 = masked(model.gru(cur_in = gru2, rec_in = prev_h3, name = 'gru3', shape = (200, 200)), mask)
 
-    fc2 = mask * NN.softmax(model.fc(cur_in = gru1, name = 'fc2', shape = (256, out_dim)))
+    fc2 = mask * NN.sigmoid(model.fc(cur_in = gru1, name = 'fc2', shape = (mem_vec, out_dim)))
 
-    mem = T.set_subtensor(mem[time_step], gru1)
-    
-    return fc2, mem
+    mem = T.set_subtensor(mem[tick], gru1)
+    show_att = T.concatenate((att, T.zeros((int(max_time), 16))), axis=0)
+    return fc2, mem, show_att[:max_time]
     
 _word_seq = word_seq.dimshuffle(1, 0, 2)
-sc, _ = theano.scan(_step, sequences=[_word_seq, T.arange(_word_seq.shape[0])], outputs_info=[T.zeros((word_seq.shape[0], int(out_dim))), mem_bank])
-#sc, sc_updates = theano.scan(_step, sequences=[_word_seq], outputs_info=[starts])
+sc, _ = theano.scan(_step, sequences=[_word_seq, T.arange(_word_seq.shape[0])], outputs_info=[T.zeros((word_seq.shape[0], int(out_dim))), mem_bank, T.zeros((int(max_time), word_seq.shape[0]))])
+att = sc[2].dimshuffle(2, 0, 1)
 word_out = sc[0].dimshuffle(1, 0, 2)
 
 EPSI = 1e-6
 cost = T.sum(NN.categorical_crossentropy(T.clip(word_out, EPSI, 1.0-EPSI), label_seq))
-#test_func = theano.function([word_seq, label_seq, starts], [cost, word_out], updates=sc_updates, allow_input_downcast=True)
-test_func = theano.function([word_seq, label_seq], [cost, word_out], allow_input_downcast=True)
+test_func = theano.function([word_seq, label_seq], [cost, word_out, att], allow_input_downcast=True)
 grad = rmsprop(cost, model.weightsPack.getW_list(), lr=1e-2, epsilon=1e-4)
-#train_func = theano.function([word_seq, label_seq, starts], [cost, word_out], updates=merge_OD(sc_updates,grad), allow_input_downcast=True)
 train_func = theano.function([word_seq, label_seq], [cost, word_out], updates=grad, allow_input_downcast=True)
 
 
