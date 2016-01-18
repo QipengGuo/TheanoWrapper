@@ -1,6 +1,7 @@
 import theano
 import theano.tensor as T
 import theano.tensor.nnet as NN
+import theano.tensor.extra_ops as Tex
 import numpy as NP
 import numpy.random as RNG
 #import h5py 
@@ -221,6 +222,29 @@ class Model(object):
 
         return fc_h
 
+    def embedding(self, cur_in = None, name= None, shape=[]):
+        if len(shape)<1 and (name in self.layersPack.keys()):
+            shape = layersPack.get(name)
+
+        max_idx, emb_size = shape
+        max_idx += 1
+        params = [None]
+        Wname_list = [name+'_DICT']
+        if name not in self.layersPack.keys():
+            #DICT
+            params[0] = theano.shared(glorot_uniform((max_idx, emb_size)))
+
+            #add W to weights pack
+            self.weightsPack.add_list(params, Wname_list)
+            #add fc to layers pack
+            self.layersPack.add(name, shape, ltype='embedding')
+        else:
+            for i in xrange(len(Wname_list)):
+                params[i] = self.weightsPack.get(Wname_list[i])
+        one_hot = Tex.to_one_hot(cur_in.dimshuffle('x'), max_idx)
+        
+        emb = T.dot(one_hot, params[0])
+        return emb
 
     def att_mem(self, cur_in = None, mem_in = None, name = None, shape=[], tick= None):
             if len(shape)<1 and (name in self.layersPack.keys()):
