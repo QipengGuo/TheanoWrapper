@@ -1,34 +1,63 @@
 import os
+import os.path
 import string
 from parse import *
 import numpy as NP
+import h5py
 class Seg_Data(object):
 	def __init__(self, path=""):
 		self.idx = 0
+                self.test_idx = 0
 		self.max_len = 50
 		self.label_st = []
 		self.label_ed = []
 		self.label_tag = []
+                self.test_X = []
+                self.test_label_st = []
+                self.test_label_ed = []
+                self.test_label_tag = []
 		self.X = []
 		self.C_vocab = 67
-		self.t = self.load('s001w53.dat')
 
-	def get_sample(self):
-		X = self.X[self.idx]
-		label_st = self.label_st[self.idx]
-		label_ed = self.label_ed[self.idx]
-		label_tag = self.label_tag[self.idx]
-		self.idx+=1
+                cnt = 0 
+                for root, dirs, files in os.walk("./SEG_DATA/"):
+                        for d in dirs:
+                                for rr, dd, ff in os.walk(os.path.join(root, d)):
+                                    for f in ff:
+                                            cnt+=1 
+                                            #if cnt>=50:
+                                            #        break
+                                            self.load(os.path.join(rr, f))
+                                            print 'Load ', f
+           
+                NP.savez('SEG_DATA.npz', test_X=self.test_X, test_label_st=self.test_label_st, test_label_ed=self.test_label_ed, test_label_tag=self.test_label_tag, X=self.X, label_st=self.label_st, label_ed=self.label_ed, label_tag=self.label_tag)
+		#self.load('s001w53.dat')
+
+	def get_sample(self, test=False):
+                if test:
+                        X = self.test_X[self.test_idx]
+                        label_st = self.test_label_st[self.test_idx]
+                        label_ed = self.test_label_ed[self.test_idx]
+                        label_tag = self.test_label_tag[self.test_idx]
+                        self.test_idx+=1
+                        if self.test_idx>=len(self.test_X):
+                                self.test_idx = 0
+                else:
+		        X = self.X[self.idx]
+		        label_st = self.label_st[self.idx]
+		        label_ed = self.label_ed[self.idx]
+		        label_tag = self.label_tag[self.idx]
+                        self.idx+=1
+                        if self.idx>=len(self.X):
+                                self.idx = 0
 		all_st = []
 		all_ed = []
 		all_tag = []
                 all_st_notag = []
                 all_ed_notag = []
-		if self.idx==len(self.X):
-			self.idx = 0
 		
                 for j in xrange(1, len(X)):
-                    for i in xrange(max(0, j-1-10), j):
+                    for i in xrange(max(0, j-10), j):
                         for k in xrange(self.C_vocab):
                             all_st.append(i)
                             all_ed.append(j)
@@ -67,8 +96,8 @@ class Seg_Data(object):
 		f=open(fname, 'r')
 		slist = f.readlines()
 		label = NP.zeros((max_len, ))
-		Pos_X = NP.zeros((1000, ))
-		Pos_Y = NP.zeros((1000, ))
+		Pos_X = NP.zeros((500, ))
+		Pos_Y = NP.zeros((500, ))
 		tick = 0
 		pen_seg = []
 		X_dim = 0
@@ -80,7 +109,12 @@ class Seg_Data(object):
 		all_ed = []
 		all_tag = []
 		X = []
+                train_flag = True
 		for s in slist:
+                        if self.scmp(s, ' Group: Training'):
+                                train_flag = True
+                        if self.scmp(s, ' Group: Testing'):
+                                train_flag = False
 			if self.scmp(s, '.SEGMENT LETTER '):
 				t1=parse(".SEGMENT LETTER {:d} ? \"{}\"", s)
 				t2=parse(".SEGMENT LETTER {:d}-{:d} ? \"{}\"", s)
@@ -97,7 +131,7 @@ class Seg_Data(object):
 					continue
 
 			if self.scmp(s, '.PEN_DOWN'):
-				print s, tick
+				#print s, tick
 				pen_seg.append(tick)
 			t = parse(".X_DIM {:d}", s)
 			if t is not None:
@@ -110,10 +144,14 @@ class Seg_Data(object):
 				Pos_X[tick] = t[0]
 				Pos_Y[tick] = t[1]
 				tick+=1
+                        if tick>=499:
+                                break
 		f.close()
 		pen_seg.append(tick)
 		st = 0
 		for i in xrange(1, len(label)):
+                        if i>=len(pen_seg):
+                                break
 			if label[i]!=label[i-1]:
 				label_st.append(pen_seg[st])
 				label_ed.append(pen_seg[i])
@@ -131,7 +169,13 @@ class Seg_Data(object):
 				x[2]=Pos_X[i]-Pos_X[i-1]
 				x[3]=Pos_Y[i]-Pos_Y[i-1]
 			X.append(x)
-		self.X.append(NP.asarray(X))
-		self.label_st.append(NP.asarray(label_st))
-		self.label_ed.append(NP.asarray(label_ed))
-		self.label_tag.append(NP.asarray(label_tag))
+                if train_flag:
+		        self.X.append(NP.asarray(X))
+		        self.label_st.append(NP.asarray(label_st))
+		        self.label_ed.append(NP.asarray(label_ed))
+		        self.label_tag.append(NP.asarray(label_tag))
+                else:
+                        self.test_X.append(NP.asarray(X))
+		        self.test_label_st.append(NP.asarray(label_st))
+		        self.test_label_ed.append(NP.asarray(label_ed))
+		        self.test_label_tag.append(NP.asarray(label_tag))
