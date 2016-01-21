@@ -9,6 +9,8 @@ class Seg_Data(object):
 		self.idx = 0
                 self.test_idx = 0
 		self.max_len = 50
+                self.storke = []
+                self.test_storke = []
 		self.label_st = []
 		self.label_ed = []
 		self.label_tag = []
@@ -25,8 +27,8 @@ class Seg_Data(object):
                                 for rr, dd, ff in os.walk(os.path.join(root, d)):
                                     for f in ff:
                                             cnt+=1 
-                                            #if cnt>=50:
-                                            #        break
+                                            if cnt>=50:
+                                                    break
                                             self.load(os.path.join(rr, f))
                                             print 'Load ', f
            
@@ -36,6 +38,7 @@ class Seg_Data(object):
 	def get_sample(self, test=False):
                 if test:
                         X = self.test_X[self.test_idx]
+                        storke = self.test_storke[self.test_idx]
                         label_st = self.test_label_st[self.test_idx]
                         label_ed = self.test_label_ed[self.test_idx]
                         label_tag = self.test_label_tag[self.test_idx]
@@ -44,6 +47,7 @@ class Seg_Data(object):
                                 self.test_idx = 0
                 else:
 		        X = self.X[self.idx]
+                        storke = self.storke[self.idx]
 		        label_st = self.label_st[self.idx]
 		        label_ed = self.label_ed[self.idx]
 		        label_tag = self.label_tag[self.idx]
@@ -56,18 +60,19 @@ class Seg_Data(object):
                 all_st_notag = []
                 all_ed_notag = []
 		
-                for j in xrange(1, len(X)):
+                stk_len = len(storke)-1
+                for j in xrange(1, stk_len):
                     for i in xrange(max(0, j-10), j):
                         for k in xrange(self.C_vocab):
                             all_st.append(i)
                             all_ed.append(j)
                             all_tag.append(k)
 
-		for i in xrange(len(X)):
-			for j in xrange(i+1, min(i+1+10, len(X))):
+		for i in xrange(stk_len):
+			for j in xrange(i+1, min(i+1+10, stk_len)):
                                 all_st_notag.append(i)
                                 all_ed_notag.append(j)
-                return X[:,NP.newaxis,:], NP.asarray(all_st), NP.asarray(all_ed), NP.asarray(all_st_notag), NP.asarray(all_ed_notag), NP.asarray(all_tag), label_st, label_ed, label_tag
+                return X[:,NP.newaxis,:], storke, NP.asarray(all_st), NP.asarray(all_ed), NP.asarray(all_st_notag), NP.asarray(all_ed_notag), NP.asarray(all_tag), label_st, label_ed, label_tag
 
 	def scmp(self, a, b):
 		l = min(len(a), len(b))
@@ -96,8 +101,8 @@ class Seg_Data(object):
 		f=open(fname, 'r')
 		slist = f.readlines()
 		label = NP.zeros((max_len, ))
-		Pos_X = NP.zeros((500, ))
-		Pos_Y = NP.zeros((500, ))
+		Pos_X = NP.zeros((2000, ))
+		Pos_Y = NP.zeros((2000, ))
 		tick = 0
 		pen_seg = []
 		X_dim = 0
@@ -113,7 +118,7 @@ class Seg_Data(object):
 		for s in slist:
                         if self.scmp(s, ' Group: Training'):
                                 train_flag = True
-                        if self.scmp(s, ' Group: Testing'):
+                        if self.scmp(s, ' Group: Development'):
                                 train_flag = False
 			if self.scmp(s, '.SEGMENT LETTER '):
 				t1=parse(".SEGMENT LETTER {:d} ? \"{}\"", s)
@@ -144,19 +149,21 @@ class Seg_Data(object):
 				Pos_X[tick] = t[0]
 				Pos_Y[tick] = t[1]
 				tick+=1
-                        if tick>=499:
-                                break
 		f.close()
 		pen_seg.append(tick)
+                if len(pen_seg)<3:
+                    return
 		st = 0
 		for i in xrange(1, len(label)):
                         if i>=len(pen_seg):
                                 break
 			if label[i]!=label[i-1]:
-				label_st.append(pen_seg[st])
-				label_ed.append(pen_seg[i])
+				label_st.append(st)
+				label_ed.append(i)
 				label_tag.append(label[i-1])
 				st = i
+                if len(label_ed) < 2:
+                    return 
 		Pos_X = NP.asarray(Pos_X)
 		Pos_Y = NP.asarray(Pos_Y)
 		Pos_X = 1.0 * (Pos_X - X_dim/2.0)/X_dim
@@ -171,11 +178,13 @@ class Seg_Data(object):
 			X.append(x)
                 if train_flag:
 		        self.X.append(NP.asarray(X))
+                        self.storke.append(NP.asarray(pen_seg))
 		        self.label_st.append(NP.asarray(label_st))
 		        self.label_ed.append(NP.asarray(label_ed))
 		        self.label_tag.append(NP.asarray(label_tag))
                 else:
                         self.test_X.append(NP.asarray(X))
+                        self.test_storke.append(NP.asarray(pen_seg))
 		        self.test_label_st.append(NP.asarray(label_st))
 		        self.test_label_ed.append(NP.asarray(label_ed))
 		        self.test_label_tag.append(NP.asarray(label_tag))

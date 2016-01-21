@@ -14,9 +14,10 @@ test_his = []
 #opt here
 
 in_dim = 4
-BiRNN_dim =32
-C_dim = 32
-SEG_dim = 16
+BiRNN_dim = 5
+C_dim = 24
+SEG_dim = 18
+STK_dim = 5
 DUR_MAX_VOCAB = 15
 DUR_EMB_DIM = 4
 TAG_MAX_VOCAB = 67
@@ -25,8 +26,9 @@ max_time = 500
 max_seg = 10
 max_tag = 67
 seg_data = Seg_Data()
-
+#coords batch(must be 1) channels
 word_seq = T.tensor3()
+storke = T.ivector()
 all_st = T.ivector()
 all_ed = T.ivector()
 all_st_notag = T.ivector()
@@ -83,46 +85,68 @@ def _calc_prob(st, ed, tag, prob, temp_prob, last_ed, mem_SEG, mem_C):
     temp_prob = T.set_subtensor(temp_prob[temp_idx], p+prob[st])
     return prob, temp_prob, ed
 
-sc, _ = theano.scan(_step_BiRNN, sequences=[word_seq], outputs_info=[T.zeros((word_seq.shape[1], int(BiRNN_dim)))])
-BiRNN_r = sc
-sc, _ = theano.scan(_step_BiRNN, sequences=[word_seq[::-1]], outputs_info=[T.zeros((word_seq.shape[1], int(BiRNN_dim)))])
-BiRNN_l = sc
-sc, _ = theano.scan(_step_to_C, sequences=[T.concatenate((BiRNN_l, BiRNN_r), axis=2)], outputs_info = [T.zeros((word_seq.shape[1], int(C_dim)))])
-mem_C = sc
+def _RNN_fwd(X):
+    t = theano.shared(NP.zeros((1, BiRNN_dim)))
+    sc, _ = theano.scan(_step_BiRNN, sequences=[X], outputs_info=[t])
+    return sc
+def _RNN_back(X):
+    t = theano.shared(NP.zeros((1, BiRNN_dim)))
+    sc, _ = theano.scan(_step_BiRNN, sequences=[X[::-1]], outputs_info=[t])
+    return sc
+
+def _storke_emb(pos, trash, X, storke):
+    fwd = _RNN_fwd(X[storke[pos]:storke[pos+1]])
+    back = _RNN_back(X[storke[pos]:storke[pos+1]])
+    return T.concatenate((fwd[-1], back[-1]), axis=1)
+
+t = T.unbroadcast(T.zeros((1, BiRNN_dim*2)), 0, 1)
+storke_emb, _ = theano.scan(_storke_emb, sequences=[T.arange(storke.shape[0]-1)], outputs_info = [t], non_sequences=[word_seq, storke])
+t = T.unbroadcast(T.zeros((1, C_dim)), 0, 1)
+mem_C, _ = theano.scan(_step_to_C, sequences=[storke_emb], outputs_info = [t])
 
 mem_SEG = theano.shared(NP.zeros((max_time * max_seg, 1, SEG_dim)))
-sc, _ = theano.scan(_step_SEG, sequences=[all_st_notag, all_ed_notag], outputs_info = [T.zeros((word_seq.shape[1], SEG_dim)), mem_SEG], non_sequences=[mem_C])
-mem_SEG = sc[1][-1]
-sc, _ = theano.scan(_step_SEG, sequences=[all_st_notag[::-1], all_ed_notag[::-1]], outputs_info = [T.zeros((word_seq.shape[1], int(SEG_dim))), mem_SEG], non_sequences=[mem_C])
-mem_SEG = sc[1][-1]
+def _SEG_emb(st, ed, mem_SEG, mem_C):
+    t = T.unbroadcast(T.zeros((1, SEG_dim)), 0, 1)
+    sc, _ = theano.scan(_step_SEG, sequences=[st, ed], outputs_info=[t, mem_SEG], non_sequences=[mem_C])
+    mem_SEG = sc[1][-1]
+    sd, _ = theano.scan(_step_SEG, sequences=[st[::-1], ed[::-1]], outputs_info=[t, mem_SEG], non_sequences=[mem_C])
+    mem_SEG = sc[1][-1]
+    return mem_SEG
 
+mem_SEG = _SEG_emb(all_st_notag, all_ed_notag, mem_SEG, mem_C)
+
+MAX_NUM = 9999
 all_prob = theano.shared(NP.zeros((max_time, 1, 1)))
-temp_prob = theano.shared(NP.zeros(((max_seg+1)*max_tag, 1, 1)))
-sc, _ = theano.scan(_calc_prob, sequences=[all_st, all_ed, all_tag], outputs_info = [all_prob, temp_prob, all_ed[0]], non_sequences=[mem_SEG, mem_C])
-all_prob = sc[0][-1]
+temp_prob = theano.shared(NP.zeros(((max_seg+1)*max_tag, 1, 1))-MAX_NUM)
 label_prob = theano.shared(NP.zeros((max_time, 1, 1)))
-sc, _ = theano.scan(_calc_prob, sequences=[label_st, label_ed, label_tag], outputs_info = [label_prob, temp_prob, label_ed[0]], non_sequences=[mem_SEG, mem_C])
-label_prob = sc[0][-1]
+
+def _calc(prob, temp_prob, st, ed, tag, mem_SEG, mem_C):
+    sc, _ = theano.scan(_calc_prob, sequences=[st, ed, tag], outputs_info=[prob, temp_prob, ed[0]], non_sequences=[mem_SEG, mem_C])
+    prob = sc[0][-1]
+    return prob
+
+all_prob = _calc(all_prob, temp_prob, all_st, all_ed, all_tag, mem_SEG, mem_C)
+label_prob = _calc(label_prob, temp_prob, label_st, label_ed, label_tag, mem_SEG, mem_C)
 all_Z = T.max(all_prob)
 label_Z = T.max(label_prob)
 
 cost = all_Z - label_Z
 
 
-test_func = theano.function([word_seq, all_st, all_ed, all_st_notag, all_ed_notag, all_tag, label_st, label_ed, label_tag], [cost, all_Z, label_Z], allow_input_downcast=True)
+test_func = theano.function([word_seq, storke, all_st, all_ed, all_st_notag, all_ed_notag, all_tag, label_st, label_ed, label_tag], [cost, all_Z, label_Z], allow_input_downcast=True)
 grad = rmsprop(cost, model.weightsPack.getW_list(), lr=1e-2, epsilon=1e-4)
-train_func = theano.function([word_seq, all_st, all_ed, all_st_notag, all_ed_notag, all_tag, label_st, label_ed, label_tag], [cost, all_Z, label_Z], updates=grad, allow_input_downcast=True)
+train_func = theano.function([word_seq, storke, all_st, all_ed, all_st_notag, all_ed_notag, all_tag, label_st, label_ed, label_tag], [cost, all_Z, label_Z], updates=grad, allow_input_downcast=True)
 
 
 for i in xrange(50):
-    for j in xrange(200):
-        X, all_st, all_ed, all_st_notag, all_ed_notag, all_tag, label_st, label_ed, label_tag = seg_data.get_sample()
-        n_cost, t1, t2 = train_func(X, all_st, all_ed, all_st_notag, all_ed_notag, all_tag, label_st, label_ed, label_tag)
+    for j in xrange(50):
+        X, stk, all_st, all_ed, all_st_notag, all_ed_notag, all_tag, label_st, label_ed, label_tag = seg_data.get_sample()
+        n_cost, t1, t2 = train_func(X, stk, all_st, all_ed, all_st_notag, all_ed_notag, all_tag, label_st, label_ed, label_tag)
         print 'Epoch = ', i, ' Batch = ', j, ' Train Cost = ', n_cost, t1, t2
     test_cost = []
     for j in xrange(len(seg_data.test_X)):
-        X, all_st, all_ed, all_st_notag, all_ed_notag, all_tag, label_st, label_ed, label_tag = seg_data.get_sample(test=True)
-        n_cost, t1, t2 = test_func(X, all_st, all_ed, all_st_notag, all_ed_notag, all_tag, label_st, label_ed, label_tag)
+        X, stk, all_st, all_ed, all_st_notag, all_ed_notag, all_tag, label_st, label_ed, label_tag = seg_data.get_sample(test=True)
+        n_cost, t1, t2 = test_func(X, stk, all_st, all_ed, all_st_notag, all_ed_notag, all_tag, label_st, label_ed, label_tag)
         test_cost.append(n_cost)
 
     print 'Epoch = ', i, ' Test Cost = ', NP.mean(test_cost)
