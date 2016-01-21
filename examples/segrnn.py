@@ -66,23 +66,25 @@ def _step_to_C(cur_in, trash):
     fc1 = T.tanh(model.fc(cur_in = cur_in, name = 'fc_2C', shape=(BiRNN_dim*2, C_dim)))
     return fc1
 
+# st, ed meas [st, ed) , not [st, ed]
 def _step_SEG(st, ed, prev_h1, mem, inputs):
-    gru1 = model.gru(cur_in = inputs[ed], rec_in = T.switch(T.eq((st-ed)**2,1), T.zeros_like(prev_h1), prev_h1), name='gru_SEG', shape=(C_dim, SEG_dim))
+    gru1 = model.gru(cur_in = inputs[ed-1], rec_in = T.switch(T.eq((st-ed)**2,1), T.zeros_like(prev_h1), prev_h1), name='gru_SEG', shape=(C_dim, SEG_dim))
     mem = T.set_subtensor(mem[st*max_seg+ed], gru1)
     return gru1, mem
 
 def _calc_prob(st, ed, tag, prob, temp_prob, last_ed, mem_SEG, mem_C):
     prob = T.switch(T.eq(ed, last_ed), prob, T.set_subtensor(prob[last_ed], T.max(temp_prob)))
     BiSEG = T.concatenate((mem_SEG[st*max_seg+ed], mem_SEG[ed*max_seg+st]), axis=1)
-    context = T.concatenate((T.switch(st>0, mem_C[st-1], mem_C[0]), mem_C[ed-1]), axis=1)
-    #context = T.concatenate((mem_C[st], mem_C[ed-1]), axis=1) # TODO add C_START and C_END
+    context = T.concatenate((T.switch(st>0, mem_C[st-1], mem_C[0]), T.switch(ed<mem_C.shape[0]-1, mem_C[ed], mem_C[ed-1])), axis=1) # TODO add C_START and C_END
     duration_emb = model.embedding(cur_in  = T.clip(T.switch(st-ed>=0,st-ed, ed-st), 0, DUR_MAX_VOCAB), name = 'dur_emb', shape = (DUR_MAX_VOCAB, DUR_EMB_DIM))
     tag_emb = model.embedding(cur_in = tag, name = 'tag_emb', shape = (TAG_MAX_VOCAB, TAG_EMB_DIM))
     all_feat = T.concatenate((BiSEG, context, duration_emb, tag_emb), axis=1)
-    p = NN.sigmoid(model.fc(cur_in = all_feat, name = 'fc_prob', shape = (SEG_dim*2+C_dim*2+DUR_EMB_DIM+TAG_EMB_DIM,1)))
+    p = T.tanh(model.fc(cur_in = all_feat, name = 'fc_prob', shape = (SEG_dim*2+C_dim*2+DUR_EMB_DIM+TAG_EMB_DIM,32))) #relu may cause all zeros
+    p2 = T.tanh(model.fc(cur_in = p, name = 'fc2_prob', shape = (32, 32)))
+    p3 = model.fc(cur_in =p2, name = 'fc3_prob', shape = (32, 1))
     temp_idx = (ed-st-1)*max_tag+tag
-    temp_idx = T.switch(temp_idx<max_tag*max_seg, temp_idx, max_tag*max_seg-1)
-    temp_prob = T.set_subtensor(temp_prob[temp_idx], p+prob[st])
+    #temp_idx = T.switch(temp_idx<max_tag*max_seg, temp_idx, max_tag*max_seg-1)
+    temp_prob = T.set_subtensor(temp_prob[temp_idx], p3+prob[st])
     return prob, temp_prob, ed
 
 def _RNN_fwd(X):
@@ -103,7 +105,7 @@ t = T.unbroadcast(T.zeros((1, BiRNN_dim*2)), 0, 1)
 storke_emb, _ = theano.scan(_storke_emb, sequences=[T.arange(storke.shape[0]-1)], outputs_info = [t], non_sequences=[word_seq, storke])
 t = T.unbroadcast(T.zeros((1, C_dim)), 0, 1)
 mem_C, _ = theano.scan(_step_to_C, sequences=[storke_emb], outputs_info = [t])
-
+mem_C = T.concatenate((mem_C, T.zeros((1, 1, C_dim))), axis=0)
 mem_SEG = theano.shared(NP.zeros((max_time * max_seg, 1, SEG_dim)))
 def _SEG_emb(st, ed, mem_SEG, mem_C):
     t = T.unbroadcast(T.zeros((1, SEG_dim)), 0, 1)

@@ -27,8 +27,8 @@ class Seg_Data(object):
                                 for rr, dd, ff in os.walk(os.path.join(root, d)):
                                     for f in ff:
                                             cnt+=1 
-                                            if cnt>=50:
-                                                    break
+                                            #if cnt>=50:
+                                            #        break
                                             self.load(os.path.join(rr, f))
                                             print 'Load ', f
            
@@ -60,8 +60,8 @@ class Seg_Data(object):
                 all_st_notag = []
                 all_ed_notag = []
 		
-                stk_len = len(storke)-1
-                for j in xrange(1, stk_len):
+                stk_len = NP.max(label_ed)
+                for j in xrange(1, stk_len+1):
                     for i in xrange(max(0, j-10), j):
                         for k in xrange(self.C_vocab):
                             all_st.append(i)
@@ -69,7 +69,7 @@ class Seg_Data(object):
                             all_tag.append(k)
 
 		for i in xrange(stk_len):
-			for j in xrange(i+1, min(i+1+10, stk_len)):
+			for j in xrange(i+1, min(i+1+10, stk_len+1)):
                                 all_st_notag.append(i)
                                 all_ed_notag.append(j)
                 return X[:,NP.newaxis,:], storke, NP.asarray(all_st), NP.asarray(all_ed), NP.asarray(all_st_notag), NP.asarray(all_ed_notag), NP.asarray(all_tag), label_st, label_ed, label_tag
