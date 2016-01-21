@@ -6,7 +6,7 @@ from seg_data import *
 from wrapper import *
 from collections import OrderedDict
 import sys
-fname = 'seg_rnn_cpu'
+fname = 'seg_rnn_gpu'
 train_batch_size = 1
 test_batch_size = 1
 test_his = []
@@ -88,11 +88,11 @@ def _calc_prob(st, ed, tag, prob, temp_prob, last_ed, mem_SEG, mem_C):
     return prob, temp_prob, ed
 
 def _RNN_fwd(X):
-    t = theano.shared(NP.zeros((1, BiRNN_dim)))
+    t = theano.shared(NP.zeros((1, BiRNN_dim), dtype=theano.config.floatX))
     sc, _ = theano.scan(_step_BiRNN, sequences=[X], outputs_info=[t])
     return sc
 def _RNN_back(X):
-    t = theano.shared(NP.zeros((1, BiRNN_dim)))
+    t = theano.shared(NP.zeros((1, BiRNN_dim), dtype=theano.config.floatX))
     sc, _ = theano.scan(_step_BiRNN, sequences=[X[::-1]], outputs_info=[t])
     return sc
 
@@ -106,7 +106,7 @@ storke_emb, _ = theano.scan(_storke_emb, sequences=[T.arange(storke.shape[0]-1)]
 t = T.unbroadcast(T.zeros((1, C_dim)), 0, 1)
 mem_C, _ = theano.scan(_step_to_C, sequences=[storke_emb], outputs_info = [t])
 mem_C = T.concatenate((mem_C, T.zeros((1, 1, C_dim))), axis=0)
-mem_SEG = theano.shared(NP.zeros((max_time * max_seg, 1, SEG_dim)))
+mem_SEG = theano.shared(NP.zeros((max_time * max_seg, 1, SEG_dim), dtype=theano.config.floatX))
 def _SEG_emb(st, ed, mem_SEG, mem_C):
     t = T.unbroadcast(T.zeros((1, SEG_dim)), 0, 1)
     sc, _ = theano.scan(_step_SEG, sequences=[st, ed], outputs_info=[t, mem_SEG], non_sequences=[mem_C])
@@ -118,14 +118,14 @@ def _SEG_emb(st, ed, mem_SEG, mem_C):
 mem_SEG = _SEG_emb(all_st_notag, all_ed_notag, mem_SEG, mem_C)
 
 MAX_NUM = 9999
-all_prob = theano.shared(NP.zeros((max_time, 1, 1)))
-temp_prob = theano.shared(NP.zeros(((max_seg+1)*max_tag, 1, 1))-MAX_NUM)
-label_prob = theano.shared(NP.zeros((max_time, 1, 1)))
+all_prob = theano.shared(NP.zeros((max_time, 1, 1), dtype=theano.config.floatX))
+temp_prob = theano.shared(NP.zeros(((max_seg+1)*max_tag, 1, 1), dtype=theano.config.floatX)-MAX_NUM)
+label_prob = theano.shared(NP.zeros((max_time, 1, 1), dtype=theano.config.floatX))
 
 def _calc(prob, temp_prob, st, ed, tag, mem_SEG, mem_C):
     sc, _ = theano.scan(_calc_prob, sequences=[st, ed, tag], outputs_info=[prob, temp_prob, ed[0]], non_sequences=[mem_SEG, mem_C])
-    prob = sc[0][-1]
-    return prob
+    temp_prob = sc[1][-1]
+    return temp_prob
 
 all_prob = _calc(all_prob, temp_prob, all_st, all_ed, all_tag, mem_SEG, mem_C)
 label_prob = _calc(label_prob, temp_prob, label_st, label_ed, label_tag, mem_SEG, mem_C)
@@ -150,6 +150,7 @@ for i in xrange(50):
         X, stk, all_st, all_ed, all_st_notag, all_ed_notag, all_tag, label_st, label_ed, label_tag = seg_data.get_sample(test=True)
         n_cost, t1, t2 = test_func(X, stk, all_st, all_ed, all_st_notag, all_ed_notag, all_tag, label_st, label_ed, label_tag)
         test_cost.append(n_cost)
+        print 'Test', j
 
     print 'Epoch = ', i, ' Test Cost = ', NP.mean(test_cost)
     model.save(fname+'_'+str(i))
