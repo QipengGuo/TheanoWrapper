@@ -92,13 +92,9 @@ class Dropout(object):
 	def __init__(self, shape = None, prob=0.5):
 		self.seed = RNG.randint(1e6)
 		self.retain_prob = 1.0 - prob
+		self.shape = shape
 		self.rng = RandomStreams(seed=self.seed)
 		self.mask = self.rng.binomial(shape, p=self.retain_prob, dtype=theano.config.floatX)
-
-	def update(self):
-		updates = OrderedDict()
-		updates[self.mask] = self.rng.binomial(shape, p=self.retain_prob, dtype=theano.config.floatX)
-		return updates
 
 	def drop(self, cur_in):
 		h = cur_in * self.mask
