@@ -9,6 +9,13 @@ from collections import OrderedDict
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 
 ### Utility functions begin
+
+def merge_OD(A, B):
+	C = OrderedDict()
+	for k,e in A.items()+B.items():
+		C[k]=e
+	return C
+
 def get_fans(shape):
     '''
     Borrowed from keras
@@ -86,7 +93,12 @@ class Dropout(object):
 		self.seed = RNG.randint(1e6)
 		self.retain_prob = 1.0 - prob
 		self.rng = RandomStreams(seed=self.seed)
-		self.mask = self.rng.binomial(shape, p=self.retain_prob)
+		self.mask = self.rng.binomial(shape, p=self.retain_prob, dtype=theano.config.floatX)
+
+	def update(self):
+		updates = OrderedDict()
+		updates[self.mask] = self.rng.binomial(shape, p=self.retain_prob, dtype=theano.config.floatX)
+		return updates
 
 	def drop(self, cur_in):
 		h = cur_in * self.mask
