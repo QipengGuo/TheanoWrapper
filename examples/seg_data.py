@@ -27,6 +27,8 @@ class Seg_Data(object):
                                 for rr, dd, ff in os.walk(os.path.join(root, d)):
                                     for f in ff:
                                             cnt+=1 
+                                            if len(self.test_X)>50:
+                                                break
                                             #if cnt>=50:
                                             #        break
                                             self.load(os.path.join(rr, f))

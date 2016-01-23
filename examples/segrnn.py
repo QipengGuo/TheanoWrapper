@@ -6,7 +6,7 @@ from seg_data import *
 from wrapper import *
 from collections import OrderedDict
 import sys
-fname = 'seg_rnn_gpu'
+fname = 'seg_rnn_cpu'
 train_batch_size = 1
 test_batch_size = 1
 test_his = []
@@ -69,12 +69,13 @@ def _step_to_C(cur_in, trash):
 # st, ed meas [st, ed) , not [st, ed]
 def _step_SEG(st, ed, prev_h1, mem, inputs):
     gru1 = model.gru(cur_in = inputs[ed-1], rec_in = T.switch(T.eq((st-ed)**2,1), T.zeros_like(prev_h1), prev_h1), name='gru_SEG', shape=(C_dim, SEG_dim))
-    mem = T.set_subtensor(mem[st*max_seg+ed], gru1)
+    mem = T.set_subtensor(mem[st*max_seg+(ed-st-1)], gru1)
     return gru1, mem
 
 def _calc_prob(st, ed, tag, prob, temp_prob, last_ed, mem_SEG, mem_C):
     prob = T.switch(T.eq(ed, last_ed), prob, T.set_subtensor(prob[last_ed], T.max(temp_prob)))
-    BiSEG = T.concatenate((mem_SEG[st*max_seg+ed], mem_SEG[ed*max_seg+st]), axis=1)
+    temp_prob = T.switch(T.eq(ed, last_ed), temp_prob, T.zeros_like(temp_prob)-9999)
+    BiSEG = mem_SEG[st*max_seg+(ed-st-1)]
     context = T.concatenate((T.switch(st>0, mem_C[st-1], mem_C[0]), T.switch(ed<mem_C.shape[0]-1, mem_C[ed], mem_C[ed-1])), axis=1) # TODO add C_START and C_END
     duration_emb = model.embedding(cur_in  = T.clip(T.switch(st-ed>=0,st-ed, ed-st), 0, DUR_MAX_VOCAB), name = 'dur_emb', shape = (DUR_MAX_VOCAB, DUR_EMB_DIM))
     tag_emb = model.embedding(cur_in = tag, name = 'tag_emb', shape = (TAG_MAX_VOCAB, TAG_EMB_DIM))
@@ -110,10 +111,10 @@ mem_SEG = theano.shared(NP.zeros((max_time * max_seg, 1, SEG_dim), dtype=theano.
 def _SEG_emb(st, ed, mem_SEG, mem_C):
     t = T.unbroadcast(T.zeros((1, SEG_dim)), 0, 1)
     sc, _ = theano.scan(_step_SEG, sequences=[st, ed], outputs_info=[t, mem_SEG], non_sequences=[mem_C])
-    mem_SEG = sc[1][-1]
+    mem_SEG_l = sc[1][-1]
     sd, _ = theano.scan(_step_SEG, sequences=[st[::-1], ed[::-1]], outputs_info=[t, mem_SEG], non_sequences=[mem_C])
-    mem_SEG = sc[1][-1]
-    return mem_SEG
+    mem_SEG_r= sc[1][-1]
+    return T.concatenate((mem_SEG_l, mem_SEG_r), axis=2)
 
 mem_SEG = _SEG_emb(all_st_notag, all_ed_notag, mem_SEG, mem_C)
 
