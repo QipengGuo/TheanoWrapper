@@ -37,6 +37,19 @@ class Seg_Data(object):
                 NP.savez('SEG_DATA.npz', test_X=self.test_X, test_label_st=self.test_label_st, test_label_ed=self.test_label_ed, test_label_tag=self.test_label_tag, X=self.X, label_st=self.label_st, label_ed=self.label_ed, label_tag=self.label_tag)
 		#self.load('s001w53.dat')
 
+        def decode(self, dec_tag, dec_st, label_seq):
+                label_seq = [self.code_C(i) for i in label_seq]
+                ed = len(dec_st)-1
+                tag_seq = []
+                dur_seq = []
+                while ed>0:
+                    st = dec_st[ed]-1
+                    tag = dec_tag[ed]
+                    dur_seq.append((max(st, 0), ed))
+                    tag_seq.append(self.code_C(tag))
+                    ed = st
+                return tag_seq[::-1], dur_seq[::-1], label_seq
+
 	def get_sample(self, test=False):
                 if test:
                         X = self.test_X[self.test_idx]
@@ -64,7 +77,7 @@ class Seg_Data(object):
                 match_ref = NP.zeros((len(storke), len(storke), self.C_vocab))
                 for i in xrange(len(label_st)):
                     match_ref[label_st[i], label_ed[i], label_tag[i]]=1.0
-                return X[:,NP.newaxis,:], storke, NP.asarray(all_tag), match_ref
+                return X[:,NP.newaxis,:], storke, NP.asarray(all_tag), match_ref, label_tag
 
 	def scmp(self, a, b):
 		l = min(len(a), len(b))
@@ -86,6 +99,24 @@ class Seg_Data(object):
 		if c=='+':
 			code=66
 		return code
+
+        def code_C(self, code):
+                code = int(code)
+                if code<26:
+                    return chr(97+code)
+                if code<36:
+                    return chr(48+code-26)
+                if code<63:
+                    return chr(65+code-36)
+                if code==63:
+                    return '!'
+                if code==64:
+                    return '*'
+                if code==65:
+                    return '&'
+                if code==66:
+                    return '+'
+                return None
 
 	def load(self, fname):
 		max_len =self.max_len
