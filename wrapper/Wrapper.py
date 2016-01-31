@@ -249,7 +249,7 @@ class Model(object):
         else:
             for i in xrange(len(Wname_list)):
                 params[i] = self.weightsPack.get(Wname_list[i])
-        one_hot = Tex.to_one_hot(cur_in.dimshuffle('x'), max_idx)
+        one_hot = Tex.to_one_hot(cur_in, max_idx)
         
         emb = T.dot(one_hot, params[0])
         return emb
@@ -329,14 +329,16 @@ def sgd(cost, params, lr, iterations, momentum=0.9, decay=0.05):  #lr and iterat
         updates.append((p, new_p))
     return updates
 
-def rmsprop(cost, params, lr=0.0001, rho=0.9, epsilon=1e-6):
+def rmsprop(cost, params, lr=0.0001, rho=0.99, epsilon=1e-6, rescale=1.):
     '''
     Borrowed from keras, no constraints, though
     '''
     updates = OrderedDict()
     grads = theano.grad(cost, params)
+    grad_norm = T.sqrt(sum(map(lambda x:T.sqr(x).sum(), grads)))
     acc = [theano.shared(NP.zeros(p.get_value().shape, dtype=theano.config.floatX)) for p in params]
     for p, g, a in zip(params, grads, acc):
+	g = g * (rescale/T.maximum(rescale, T.sqrt(grad_norm)))
         new_a = rho * a + (1 - rho) * g ** 2
         updates[a] = new_a
         new_p = p - lr * g / T.sqrt(new_a + epsilon)
