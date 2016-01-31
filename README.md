@@ -21,7 +21,9 @@ from wrapper import * #import tools
 in_data = T.matrix() #a simple mlp network, two axis are (samples, channels)
 label = T.matrix()
 
-model = Model #declare a model 
+model = Model() #declare a model 
+
+model.load('abc') # load must before compile
 
 #define network working flow
 def _step(X):
@@ -41,8 +43,7 @@ test_func = theano.function([in_data, label], [loss, net_out], allow_input_downc
 train_cost, _ = auto_batch(train_func, train_batch_size, train_data, train_label) # train_data, train_label is the real data
 test_cost, _ = auto_batch(test_func, test_batch_size, test_data, test_label)
 
-model.save('abc') #save the model in npz format, the network can't share saved file on cpu and gpu at now
-model.load('abc')
+model.save('abc') #save the model in npz format, the network can't share saved file between cpu and gpu at now
 
 ```
 
