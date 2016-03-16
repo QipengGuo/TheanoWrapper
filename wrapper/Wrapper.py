@@ -254,6 +254,25 @@ class Model(object):
         emb = T.dot(one_hot, params[0])
         return emb
 
+    def Wmatrix(self, name= None, shape=[]):
+        if len(shape)<1 and (name in self.layersPack.keys()):
+            shape = layersPack.get(name)
+
+        params = [None]
+        Wname_list = [name+'_Wmatrix']
+        if name not in self.layersPack.keys():
+            #DICT
+            params[0] = theano.shared(glorot_uniform(shape))
+
+            #add W to weights pack
+            self.weightsPack.add_list(params, Wname_list)
+            #add fc to layers pack
+            self.layersPack.add(name, shape, ltype='Wmatrix')
+        else:
+            for i in xrange(len(Wname_list)):
+                params[i] = self.weightsPack.get(Wname_list[i])
+        return params[0]
+
     def att_mem(self, cur_in = None, mem_in = None, name = None, shape=[], tick= None):
             if len(shape)<1 and (name in self.layersPack.keys()):
                     shape = layersPack.get(name)
@@ -281,11 +300,10 @@ class Model(object):
             mem = mem_in[:tick+1].dimshuffle([0, 1, 2, 'x'])
             Wx_Uh = T.dot(cur_in, params[0]).dimshuffle(['x', 0, 1, 'x']) + batched_dot4(params[1].dimshuffle(['x', 'x', 0, 1]), mem)
             v_t = T.switch(params[2]>=0, params[2], -params[2])
-            v_t = v_t / T.sum(v_t)
-            att = batched_dot4(T.switch(params[2]>=0, params[2], -params[2]).dimshuffle(['x', 'x', 0, 1]), NN.sigmoid(Wx_Uh))
+            att = batched_dot4(v_t.dimshuffle(['x', 'x', 0, 1]), T.tanh(Wx_Uh))
             #att = NN.sigmoid(Wx_Uh)
             #att = T.extra_ops.squeeze(T.patternbroadcast(att, (False,False,True,True)))
-            att = att[:,:,0,0] * 1e2
+            att = att[:,:,0,0] * 1.0
             return (NN.softmax(att.transpose())).transpose()
             #return att
 
