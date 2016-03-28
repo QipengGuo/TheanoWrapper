@@ -22,12 +22,14 @@ cw_mask = T.matrix()
 word_target = T.tensor3()
 model = Model()
 #model.load(fname+'_'+str(229))
+
+#NULL a b c I J    input
+#a    b c I J K    output
+#0    0 0 1 0 0 1  mask
+
 def get_mask(cur_in, mask_value=0.):
     return T.shape_padright(T.any((1. - T.eq(cur_in, mask_value)), axis=-1))
 
-# a b c I J input
-# b c I J K output
-# 0 0 1 0 0 mask
 def _step(char, mask, trash, prev_h1, word_emb, h_before, mem):
 	batch_mask = get_mask(char)
 	gru1 = batch_mask * model.gru(cur_in = char, rec_in = prev_h1, name = 'gru1', shape = (in_dim, gru1_dim))
@@ -48,13 +50,6 @@ def word_step(word_emb, mask, trash, prev_h1):
 	fc1 = mask * batch_mask * NN.softmax(model.fc(cur_in = gru1, name = 'fc_word', shape = (gru2_dim, word_out_dim)))
 	return fc1, next_h1
 
-#NULL a b c I J    input
-#a    b c I J K    output
-#0    0 0 1 0 0 1  mask
-
-#NULL  K J I c b
-#K     J I c b a
-#1     0 0 1 0 0 1
 mem = model.Wmatrix(name='mem', shape=(DICT_SIZE, mem_dim)).dimshuffle(0, 'x', 1)
 sc, _ = theano.scan(_step, sequences=[char_in.dimshuffle([1, 0, 2]), cw_mask.dimshuffle([1, 0])], outputs_info = [T.zeros((char_in.shape[0], out_dim)),T.zeros((char_in.shape[0], gru1_dim)), T.zeros((char_in.shape[0], mem_dim)), T.zeros((char_in.shape[0], gru1_dim))], non_sequences=[mem])
 
@@ -79,10 +74,9 @@ print 'TRAIN COMPILE'
 
 def evaluate(net_out, label):
         acc = 1.0 * NP.sum((NP.argmax(net_out, 2)==NP.argmax(label, 2)).astype('int')+(NP.any(label>0, axis=-1)).astype('int')>1)/NP.sum(label>0)
-#        print  'DEBUG ', NP.sum((NP.argmax(net_out, 2)==NP.argmax(label, 2)).astype('int')+(NP.any(label>0, axis=-1)).astype('int')>1), 'VALID', NP.sum(label>0)
         net_out += EPSI
         net_out /= NP.sum(net_out, axis=2)[:,:,NP.newaxis]
-        per = NP.sum(-1.0*label*NP.log(net_out))/NP.sum(label>0)
+        per = NP.exp(NP.sum(-1.0*label*NP.log(net_out))/NP.sum(label>0))
         return acc, per
        
 
