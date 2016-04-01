@@ -86,11 +86,11 @@ print 'TRAIN COMPILE'
 
 #calculate the Acc and PPL
 def evaluate(net_out, label):
-        acc = 1.0 * NP.sum((NP.argmax(net_out, 2)==NP.argmax(label, 2)).astype('int')+(NP.any(label>0, axis=-1)).astype('int')>1)/NP.sum(label>0)
+        acc = 1.0 * NP.sum((NP.argmax(net_out, 2)==NP.argmax(label, 2)).astype('int')+(NP.any(label>0, axis=-1)).astype('int')>1)
         net_out += EPSI
         net_out /= NP.sum(net_out, axis=2)[:,:,NP.newaxis]
-        per = NP.exp(NP.sum(-1.0*label*NP.log(net_out))/NP.sum(label>0))
-        return acc, per
+        per = NP.sum(-1.0*label*NP.log(net_out))
+        return acc, per, NP.sum(label>0)
        
 
 test_his = []
@@ -99,26 +99,30 @@ for i in xrange(0, 500):
         data, label, mask, word_label  = ptb.get_batch(train_batch_size)
         #print NP.shape(word_label)
         n_cost, net_out, net_dec = train_func(data, mask, label, word_label)
-        acc, per = evaluate(net_out, label[:,1:]) # i should using BPC here later
-        dec_acc, dec_per = evaluate(net_dec, word_label) # wrong name from previous code, not decode, it is word Acc and word PPL
-        print 'Epoch = ', str(i), ' Batch = ', str(j), ' Cost = ', n_cost, ' ACC = ', acc, ' Per = ', per, 'Dec ACC = ', dec_acc, ' Per = ', dec_per, ' LEN = ', NP.shape(data)[1]
+        acc, per, cnt = evaluate(net_out, label[:,1:]) # i should using BPC here later
+        dec_acc, dec_per, dcnt = evaluate(net_dec, word_label) # wrong name from previous code, not decode, it is word Acc and word PPL
+        print 'Epoch = ', str(i), ' Batch = ', str(j), ' Cost = ', n_cost, ' ACC = ', 1.0*acc/cnt, ' BPC = ', (1.0*per/cnt)/NP.log(2), 'Dec ACC = ', 1.0*dec_acc/dcnt, ' Per = ', NP.exp(1.0*dec_per/dcnt), ' LEN = ', NP.shape(data)[1]
  
     # test part, same with training
     test_acc = []
     test_per = []
     test_dacc = []
     test_dper = []
+    test_cnt = []
+    test_dcnt = []
     for j in xrange(ptb.test_size/test_batch_size):
         data, label, mask, word_label = ptb.get_batch(test_batch_size, test=True)
         n_cost, net_out, net_dec = test_func(data, mask, label, word_label)
-        acc, per = evaluate(net_out, label[:,1:])
-        dec_acc, dec_per = evaluate(net_dec, word_label)
+        acc, per, cnt = evaluate(net_out, label[:,1:])
+        dec_acc, dec_per, dcnt = evaluate(net_dec, word_label)
         print ' Test Batch = ', j,  
         test_acc.append(acc)
         test_per.append(per)
+        test_cnt.append(cnt)
         test_dacc.append(dec_acc)
         test_dper.append(dec_per)
-    print '\nEpoch = ', str(i), ' Test Acc = ', NP.mean(NP.asarray(test_acc)), ' Test Per = ', NP.mean(NP.asarray(test_per)), 'Test Dec ACC = ', NP.mean(NP.asarray(test_dacc)), 'Test Dec Per = ', NP.mean(NP.asarray(test_dper))
+        test_dcnt.append(dcnt)
+    print '\nEpoch = ', str(i), ' Test Acc = ', NP.sum(test_acc)/NP.sum(test_cnt), ' Test BPC = ', (NP.sum(test_per)/NP.sum(test_cnt))/NP.log(2), 'Test Dec ACC = ', NP.sum(test_dacc)/NP.sum(test_dcnt), 'Test Dec Per = ', NP.exp(NP.sum(test_dper)/NP.sum(test_dcnt))
     NP.savez(fname+'_test_show.npz', label=label, predict=net_out, dec=net_dec)
     test_his.append(NP.mean(NP.asarray(test_per)))
     model.save(fname+'_'+str(i))
