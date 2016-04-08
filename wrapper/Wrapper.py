@@ -299,7 +299,8 @@ class Model(object):
             #time, batch, channel, 1
             mem = mem_in[:tick+1].dimshuffle([0, 1, 2, 'x'])
             Wx_Uh = T.dot(cur_in, params[0]).dimshuffle(['x', 0, 1, 'x']) + batched_dot4(params[1].dimshuffle(['x', 'x', 0, 1]), mem)
-            v_t = T.switch(params[2]>=0, params[2], -params[2])
+            v_t = params[2]
+            #v_t = T.switch(params[2]>=0, params[2], -params[2])
             att = batched_dot4(v_t.dimshuffle(['x', 'x', 0, 1]), T.tanh(Wx_Uh))
             #att = NN.sigmoid(Wx_Uh)
             #att = T.extra_ops.squeeze(T.patternbroadcast(att, (False,False,True,True)))
@@ -347,12 +348,12 @@ def sgd(cost, params, lr, iterations, momentum=0.9, decay=0.05):  #lr and iterat
         updates.append((p, new_p))
     return updates
 
-def rmsprop(cost, params, lr=0.0001, rho=0.99, epsilon=1e-6, rescale=1.):
+def rmsprop(cost, params, lr=0.0001, rho=0.99, epsilon=1e-6, rescale=1. , ignore_input_disconnect=False):
     '''
     Borrowed from keras, no constraints, though
     '''
     updates = OrderedDict()
-    grads = theano.grad(cost, params)
+    grads = theano.grad(cost, params, disconnected_inputs='ignore' if ignore_input_disconnect else 'raise')
     grad_norm = T.sqrt(sum(map(lambda x:T.sqr(x).sum(), grads)))
     acc = [theano.shared(NP.zeros(p.get_value().shape, dtype=theano.config.floatX)) for p in params]
     for p, g, a in zip(params, grads, acc):
