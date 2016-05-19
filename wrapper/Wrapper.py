@@ -10,6 +10,57 @@ from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 
 ### Utility functions begin
 
+def softmax(x):
+    e_x = T.exp(x)
+    sm = e_x / T.sum(e_x, axis=0, keepdims=True)
+    return sm
+
+def concatenate(tensor_list, axis=0):
+    """
+    Borrow from https://github.com/nyu-dl/dl4mt-tutorial/
+
+    Alternative implementation of `theano.tensor.concatenate`.
+    This function does exactly the same thing, but contrary to Theano's own
+    implementation, the gradient is implemented on the GPU.
+    Backpropagating through `theano.tensor.concatenate` yields slowdowns
+    because the inverse operation (splitting) needs to be done on the CPU.
+    This implementation does not have that problem.
+    :usage:
+        >>> x, y = theano.tensor.matrices('x', 'y')
+        >>> c = concatenate([x, y], axis=1)
+    :parameters:
+        - tensor_list : list
+            list of Theano tensor expressions that should be concatenated.
+        - axis : int
+            the tensors will be joined along this axis.
+    :returns:
+        - out : tensor
+            the concatenated tensor expression.
+    """
+    concat_size = sum(tt.shape[axis] for tt in tensor_list)
+
+    output_shape = ()
+    for k in range(axis):
+        output_shape += (tensor_list[0].shape[k],)
+    output_shape += (concat_size,)
+    for k in range(axis + 1, tensor_list[0].ndim):
+        output_shape += (tensor_list[0].shape[k],)
+
+    out = T.zeros(output_shape)
+    offset = 0
+    for tt in tensor_list:
+        indices = ()
+        for k in range(axis):
+            indices += (slice(None),)
+        indices += (slice(offset, offset + tt.shape[axis]),)
+        for k in range(axis + 1, tensor_list[0].ndim):
+            indices += (slice(None),)
+
+        out = T.set_subtensor(out[indices], tt)
+        offset += tt.shape[axis]
+
+    return out
+
 def merge_OD(A, B):
 	C = OrderedDict()
 	for k,e in A.items()+B.items():
@@ -110,7 +161,7 @@ class Model(object):
             import theano.sandbox.cuda.dnn as CUDNN
             if CUDNN.dnn_available():
                 print 'Using CUDNN instead of Theano conv2d'
-                conv2d = CUDNN.dnn_conv
+                self.conv2d = CUDNN.dnn_conv
 
     def save(self, path):
         self.weightsPack.save(path+'_W.npz')
@@ -172,6 +223,35 @@ class Model(object):
             shape = layersPack.get(name)
 
         in_dim, out_dim = shape
+        params = [None]*3
+        Wname_list = [name+'_W', name+'_U', name+'_b']
+        if name not in self.layersPack.keys():
+            #W_h, U_h, b_h
+            params[0] = theano.shared(NP.concatenate((glorot_uniform((in_dim, out_dim)), glorot_uniform((in_dim, out_dim)), glorot_uniform((in_dim, out_dim))), axis=1), name = 'W')
+            params[1] = theano.shared(NP.concatenate((orthogonal((out_dim, out_dim)), orthogonal((out_dim, out_dim)),orthogonal((out_dim, out_dim))), axis=1), name = 'U')
+            params[2] = theano.shared(NP.concatenate((NP.zeros((out_dim,), dtype=theano.config.floatX), NP.zeros((out_dim,), dtype=theano.config.floatX), NP.zeros((out_dim,), dtype=theano.config.floatX)), axis=0), name = 'b')
+
+            #add W to weights pack
+            self.weightsPack.add_list(params, Wname_list)
+
+            #add gru to layers pack
+            self.layersPack.add(name, shape, ltype='gru')
+        else:
+            for i in xrange(len(Wname_list)):
+                params[i] = self.weightsPack.get(Wname_list[i])
+
+        Wx = T.dot(cur_in, params[0])
+        gates = NN.sigmoid(Wx[:,:2*out_dim]+T.dot(rec_in, params[1][:,:2*out_dim])+params[2][:2*out_dim]) # 0:out_dim r, out_dim:2*out_dim z
+        _gru_h = T.tanh(Wx[:,2*out_dim:]+T.dot(rec_in * gates[:,:out_dim], params[1][:,2*out_dim:])+params[2][2*out_dim:])
+        gru_h = (1-gates[:,out_dim:]) * rec_in + gates[:,out_dim:] * _gru_h
+        
+        return gru_h
+
+    def gru_bak(self, cur_in=None, rec_in=None, name=None, shape=[]):  
+        if len(shape)<1 and (name in self.layersPack.keys()):
+            shape = layersPack.get(name)
+
+        in_dim, out_dim = shape
         params = [None]*9
         Wname_list = [name+'_W_h', name+'_U_h', name+'_b_h',name+'_W_r', name+'_U_r', name+'_b_r', name+'_W_z', name+'_U_z', name+'_b_z']
         if name not in self.layersPack.keys():
@@ -203,7 +283,7 @@ class Model(object):
         gru_h = (1 - gru_z) * rec_in + gru_z * _gru_h
 
         return gru_h
-            
+           
     def fc(self, cur_in=None, name=None, shape=[]):
         if len(shape)<1 and (name in self.layersPack.keys()):
             shape = layersPack.get(name)
@@ -249,9 +329,10 @@ class Model(object):
         else:
             for i in xrange(len(Wname_list)):
                 params[i] = self.weightsPack.get(Wname_list[i])
-        one_hot = Tex.to_one_hot(cur_in, max_idx)
+        #one_hot = Tex.to_one_hot(cur_in, max_idx)
         
-        emb = T.dot(one_hot, params[0])
+        #emb = T.dot(one_hot, params[0])
+        emb = params[0][cur_in]
         return emb
 
     def Wmatrix(self, name= None, shape=[]):
@@ -262,7 +343,7 @@ class Model(object):
         Wname_list = [name+'_Wmatrix']
         if name not in self.layersPack.keys():
             #DICT
-            params[0] = theano.shared(glorot_uniform(shape))
+            params[0] = theano.shared(orthogonal(shape), name='W_matrix')
 
             #add W to weights pack
             self.weightsPack.add_list(params, Wname_list)
@@ -273,7 +354,43 @@ class Model(object):
                 params[i] = self.weightsPack.get(Wname_list[i])
         return params[0]
 
-    def att_mem(self, cur_in = None, mem_in = None, name = None, shape=[], tick= None):
+    def att_mem_2in(self, cur_in1 = None, cur_in2 = None, mem_in = None, name = None, shape=[], act_func=None):
+            if act_func is None:
+                act_func = softmax
+            if len(shape)<1 and (name in self.layersPack.keys()):
+                    shape = layersPack.get(name)
+
+            cur1_dim, cur2_dim, rec_dim = shape
+            h_dim = rec_dim
+            params = [None]*4
+            Wname_list = [name+'_W1', name+'_W2', name+'_U', name+'_V']
+            if name not in self.layersPack.keys():
+                    #W1
+                    params[0] = theano.shared(glorot_uniform((cur1_dim, h_dim)), name='W1_att')
+                    params[1] = theano.shared(glorot_uniform((cur2_dim, h_dim)), name='W2_att')
+                    #U
+                    params[2] = theano.shared(orthogonal((rec_dim, h_dim)), name='U_att')
+                    #V
+                    params[3] = theano.shared(glorot_uniform((1, h_dim)), name='V_att')
+                    
+                    self.weightsPack.add_list(params, Wname_list)
+
+                    self.layersPack.add(name, shape, ltype='att_mem')
+            else:
+                    for i in xrange(len(Wname_list)):
+                            params[i] = self.weightsPack.get(Wname_list[i])
+
+            #time, batch, channel, 1
+            mem = mem_in.dimshuffle([0, 1, 2, 'x'])
+            Wx_Uh = T.dot(cur_in1, params[0]).dimshuffle(['x', 0, 1, 'x']) + T.dot(cur_in2, params[1]).dimshuffle(['x', 0, 1, 'x']) + batched_dot4(params[2].dimshuffle(['x', 'x', 0, 1]), mem)
+            v_t = params[3]
+            att = batched_dot4(v_t.dimshuffle(['x', 'x', 0, 1]), T.tanh(Wx_Uh))
+            att = att[:,:,0,0] 
+            return act_func(att)
+
+    def att_mem(self, cur_in = None, mem_in = None, name = None, shape=[], act_func=None):
+            if act_func is None:
+                act_func = softmax
             if len(shape)<1 and (name in self.layersPack.keys()):
                     shape = layersPack.get(name)
 
@@ -282,8 +399,8 @@ class Model(object):
             params = [None]*3
             Wname_list = [name+'_W', name+'_U', name+'_V']
             if name not in self.layersPack.keys():
-                    #W
-                    params[0] = theano.shared(glorot_uniform((cur_dim, h_dim)), name='W_att')
+                    #W1
+                    params[0] = theano.shared(glorot_uniform((cur_dim, h_dim)), name='W1_att')
                     #U
                     params[1] = theano.shared(orthogonal((rec_dim, h_dim)), name='U_att')
                     #V
@@ -297,16 +414,13 @@ class Model(object):
                             params[i] = self.weightsPack.get(Wname_list[i])
 
             #time, batch, channel, 1
-            mem = mem_in[:tick+1].dimshuffle([0, 1, 2, 'x'])
+            mem = mem_in.dimshuffle([0, 1, 2, 'x'])
             Wx_Uh = T.dot(cur_in, params[0]).dimshuffle(['x', 0, 1, 'x']) + batched_dot4(params[1].dimshuffle(['x', 'x', 0, 1]), mem)
             v_t = params[2]
-            #v_t = T.switch(params[2]>=0, params[2], -params[2])
             att = batched_dot4(v_t.dimshuffle(['x', 'x', 0, 1]), T.tanh(Wx_Uh))
-            #att = NN.sigmoid(Wx_Uh)
-            #att = T.extra_ops.squeeze(T.patternbroadcast(att, (False,False,True,True)))
-            att = att[:,:,0,0] * 1.0
-            return (NN.softmax(att.transpose())).transpose()
-            #return att
+            att = att[:,:,0,0] 
+            return act_func(att)
+
 
     def conv(self, cur_in=None, name=None, shape=[]):
         if len(shape)<1 and (name in self.layersPack.keys()):
@@ -425,10 +539,20 @@ class WeightsPack(object):
         
     def load(self, path):
         data = NP.load(path)
-        self.idxs = data['idxs'].tolist()
-        self.num_elem = data['num_elem'].tolist()
-        self.vect = data['vect'].tolist()
-
+        idxs = data['idxs'].tolist()
+        num_elem = data['num_elem'].tolist()
+        vect = data['vect'].tolist()
+        if len(idxs) == len(self.idxs):
+            for i in idxs.keys():
+                self.vect[self.idxs[i]].set_value(vect[idxs[i]].get_value())
+        else:
+            print 'Create weights'
+            print idxs
+            print self.idxs
+            print '-------------------------'
+            self.idxs = idxs
+            self.num_elem = num_elem
+            self.vect = vect
         #file = h5py.File(path, 'r')
         #self.idxs  = file['W_idxs'][:]
         #self.num_elem = file['W_num_elem'][:]
