@@ -203,7 +203,7 @@ class Model(object):
             #add W to weights pack
             self.weightsPack.add_list(params, Wname_list)
 
-            #add gru to layers pack
+            #add lstm to layers pack
             self.layersPack.add(name, shape, ltype='lstm')
         else:
             for i in xrange(len(Wname_list)):
@@ -218,7 +218,7 @@ class Model(object):
 
         return lstm_t, c_t
 
-    def gru(self, cur_in=None, rec_in=None, name=None, shape=[]):  
+    def gru_bak(self, cur_in=None, rec_in=None, name=None, shape=[]):  
         if len(shape)<1 and (name in self.layersPack.keys()):
             shape = layersPack.get(name)
 
@@ -240,14 +240,15 @@ class Model(object):
             for i in xrange(len(Wname_list)):
                 params[i] = self.weightsPack.get(Wname_list[i])
 
-        Wx = T.dot(cur_in, params[0])
-        gates = NN.sigmoid(Wx[:,:2*out_dim]+T.dot(rec_in, params[1][:,:2*out_dim])+params[2][:2*out_dim]) # 0:out_dim r, out_dim:2*out_dim z
-        _gru_h = T.tanh(Wx[:,2*out_dim:]+T.dot(rec_in * gates[:,:out_dim], params[1][:,2*out_dim:])+params[2][2*out_dim:])
-        gru_h = (1-gates[:,out_dim:]) * rec_in + gates[:,out_dim:] * _gru_h
+        Wx = T.dot(cur_in, params[0]) + params[2]
+        gates = NN.sigmoid(Wx[:,:2*out_dim]+T.dot(rec_in, params[1][:,:2*out_dim])) # 0:out_dim r, out_dim:2*out_dim z
+        _gru_h = T.tanh(Wx[:,2*out_dim:]+T.dot(rec_in * gates[:,:out_dim], params[1][:,2*out_dim:]))
+	z_t = gates[:,out_dim:]
+        gru_h = (1-z_t) * rec_in + z_t * _gru_h
         
         return gru_h
 
-    def gru_bak(self, cur_in=None, rec_in=None, name=None, shape=[]):  
+    def gru(self, cur_in=None, rec_in=None, name=None, shape=[]):  
         if len(shape)<1 and (name in self.layersPack.keys()):
             shape = layersPack.get(name)
 
@@ -329,9 +330,7 @@ class Model(object):
         else:
             for i in xrange(len(Wname_list)):
                 params[i] = self.weightsPack.get(Wname_list[i])
-        #one_hot = Tex.to_one_hot(cur_in, max_idx)
-        
-        #emb = T.dot(one_hot, params[0])
+
         emb = params[0][cur_in]
         return emb
 
@@ -343,11 +342,11 @@ class Model(object):
         Wname_list = [name+'_Wmatrix']
         if name not in self.layersPack.keys():
             #DICT
-            params[0] = theano.shared(orthogonal(shape), name='W_matrix')
+            params[0] = theano.shared(glorot_uniform(shape), name='W_matrix')
 
             #add W to weights pack
             self.weightsPack.add_list(params, Wname_list)
-            #add fc to layers pack
+            #add Wmatrix to layers pack
             self.layersPack.add(name, shape, ltype='Wmatrix')
         else:
             for i in xrange(len(Wname_list)):
@@ -530,12 +529,6 @@ class WeightsPack(object):
     
     def save(self, path):
         NP.savez(path, idxs=self.idxs, num_elem=self.num_elem, vect=self.vect)
-
-        #file = h5py.File(path, 'w')
-        #file.create_dataset('W_idxs', data=(self.idxs))
-        #file.create_dataset('W_num_elem', data=(self.num_elem))
-        #file.create_dataset('W_vect', data=(self.vect))
-        #file.close()
         
     def load(self, path):
         data = NP.load(path)
@@ -546,18 +539,13 @@ class WeightsPack(object):
             for i in idxs.keys():
                 self.vect[self.idxs[i]].set_value(vect[idxs[i]].get_value())
         else:
-            print 'Create weights'
+            print 'Replace weights'
             print idxs
             print self.idxs
             print '-------------------------'
             self.idxs = idxs
             self.num_elem = num_elem
             self.vect = vect
-        #file = h5py.File(path, 'r')
-        #self.idxs  = file['W_idxs'][:]
-        #self.num_elem = file['W_num_elem'][:]
-        #self.vect = file['W_vect'][:]
-        #file.close()
 
 
 class LayersPack(object):
@@ -580,20 +568,10 @@ class LayersPack(object):
     
     def save(self, path):
         NP.savez(path, idxs=self.idxs, num_elem=self.num_elem, shape=self.shape)
-        #file = h5py.File(path, 'w')
-        #file.create_dataset('L_idxs', data=(self.idxs))
-        #file.create_dataset('L_num_elem', data=(self.num_elem))
-        #file.create_dataset('L_shape', data=(self.shape))
-        #file.close()
 
     def load(self, path):
         data = NP.load(path)
         self.idxs = data['idxs'].tolist()
         self.num_elem = data['num_elem'].tolist()
         self.shape = data['shape'].tolist()
-        #file = h5py.File(path, 'r')
-        #self.idxs  = file['L_idxs'][:]
-        #self.num_elem = file['L_num_elem'][:]
-        #self.shape = file['L_shape'][:]
-        #file.close()
     

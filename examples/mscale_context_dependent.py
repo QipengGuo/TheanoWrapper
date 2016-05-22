@@ -1,3 +1,4 @@
+#the code may be quite ugly, but this version is using in now running experiments, the optimization will add in next version(such as speed up cross_entropy and remove abs in attention part)
 import time
 import sys, getopt
 import numpy as NP
@@ -47,15 +48,15 @@ except getopt.GetoptError:
     sys.exit(2)
 
 
-fname = './saves/context_word_bdrop_normal'
+fname = './saves/context_dependent_bdrop_cemb_hw'
 
 #REGULAR_FACTOR = 0.0005 # L2 norm loss
 dict_size = 50 #our word emb dict is an 50 * 100 matrix
 gru1_dim = 200 # gru in character LM 
 gru2_dim = 400 # gru in word LM
-emb_dim = 100 # word emb dim
+emb_dim = 200 # word emb dim, must equal to gru1_dim due to the high way network
 char_emb_dim = 15
-train_batch_size = 64
+train_batch_size = 128
 test_batch_size = 128
 drop_flag = False
 
@@ -115,6 +116,12 @@ model = Model()
 #drop1 = Dropout(shape=(train_batch_size, gru1_dim))
 drop2 = Dropout(shape=(train_batch_size, emb_dim))
 drop3 = Dropout(shape=(train_batch_size, gru2_dim))
+drop4 = Dropout(shape=(train_batch_size, emb_dim))
+
+def categorical_crossentropy(prob, true_idx):
+    true_idx = T.arange(true_idx.shape[0]) * word_out_dim + true_idx
+    t1 = prob.flatten()[true_idx]
+    return -T.log(t1)
 
 #NULL a b c I J    input
 #a    b c I J K    output
@@ -126,6 +133,11 @@ def get_mask(cur_in, mask_value=0.):
 
 #character step
 
+def high_way(cur_in=None, name='', shape=[]):
+	g = NN.sigmoid(model.fc(cur_in = cur_in, name=name+'_g', shape=shape))
+	h = T.tanh(model.fc(cur_in=cur_in, name=name+'_h', shape=shape))
+	return h*g + cur_in * (1. - g)
+
 def _char_step_context_free(char, mask, prev_h1):
 	batch_mask = get_mask(char, -1.)
 	mask = T.shape_padright(mask)
@@ -133,15 +145,23 @@ def _char_step_context_free(char, mask, prev_h1):
 	gru1 = batch_mask * model.gru(cur_in = char, rec_in = prev_h1, name = 'gru_char', shape = (char_emb_dim, gru1_dim))
 	return (1. - mask) * gru1, gru1
 
-def _gen_word_emb_step(h_context_free, h_before, word_emb_base):
+def _gen_word_emb_step(h_context_free, h_before):
         batch_mask = get_mask(h_context_free)
 	D_h_c = h_before 
 	D_h_cf = h_context_free
-	att = model.att_mem_2in(cur_in1 = D_h_c, cur_in2 = D_h_cf, mem_in = word_emb_base, name = 'att1', shape = (emb_dim, gru1_dim, emb_dim), act_func = None)
-	word_emb_att = batch_mask * T.sum(word_emb_base.dimshuffle(1,0,2)*att.dimshuffle(1,0,'x'), axis=1)
-#	gru_emb = model.gru(cur_in = word_emb_att, rec_in = h_before, name = 'gru_emb', shape = (emb_dim, emb_dim))
-#	return gru_emb, word_emb_att, att
-	h_before = h_before * 0.5 + word_emb_att * 0.5
+	hw_c = high_way(cur_in = D_h_c, name = 'hw_emb_c', shape=(emb_dim ,emb_dim))
+        hw_c = high_way(cur_in = hw_c, name = 'hw_emb_c2', shape=(emb_dim, emb_dim))
+	hw_cf = high_way(cur_in = D_h_cf, name = 'hw_emb_cf', shape=(gru1_dim, emb_dim))
+        hw_cf = high_way(cur_in = hw_cf, name = 'hw_emb_cf2', shape=(emb_dim, emb_dim))
+	word_emb_att = batch_mask * 0.5 * (hw_c+hw_cf)
+        #if drop_flag:
+        if False:
+            D_emb = drop4.drop(word_emb_att)
+        else:
+            D_emb = word_emb_att
+	#gru_emb = model.gru(cur_in = D_emb, rec_in = h_before, name = 'gru_emb', shape = (emb_dim, emb_dim))
+	#return gru_emb, word_emb_att, att
+	h_before = h_before * 0.5 + D_emb * 0.5
 	return h_before, word_emb_att, att
 
 def softmax(x):
@@ -171,72 +191,74 @@ def word_step(word_emb, prev_h1):
 
 	return D_gru1
 
-#define the word emb dict
-word_emb_base = model.Wmatrix(name='word_emb_base', shape=(dict_size, emb_dim)).dimshuffle(0, 'x', 1)
 drop_flag = False
 EPSI = 1e-15
-def get_express(train=False, emb_flag='all'):
+def get_express(train=False, emb_flag=None):
 	global drop_flag
 	drop_flag = train
 	batch_size = char_in.shape[0]
-	sc, _ = theano.scan(_char_step_context_free, sequences=[char_in.dimshuffle(1,0), cw_mask.dimshuffle(1,0)], outputs_info = [T.zeros((batch_size, gru1_dim)), None])
-        h_context_free = sc[1].dimshuffle(1,0,2)
-        h_context_free = h_context_free[cw_index1, cw_index2]
-        h_context_free = h_context_free.dimshuffle(1,0,2)
-        
-        sc, _ = theano.scan(_gen_word_emb_step, sequences=[h_context_free], outputs_info = [T.zeros((batch_size, emb_dim)), None, None], non_sequences=[word_emb_base])
-	word_embs_att = sc[1]
-	if emb_flag == 'all':
-		word_embs = word_embs_att + word_embs_fc
-	if emb_flag == 'att':
-		word_embs = word_embs_att
-	if emb_flag == 'fc':
-		word_embs = word_embs_fc
-	atts = sc[-1]
+	sc, _ = theano.scan(_char_step_context_free, sequences=[char_in.dimshuffle(1,0), cw_mask.dimshuffle(1,0)], outputs_info = [T.zeros((batch_size, gru1_dim)), None], name='scan_char_rnn', profile=False)
 
-	sc,_ = theano.scan(word_step, sequences=[word_embs], outputs_info = [T.zeros((batch_size, gru2_dim))])
+        # assign character time step to word time step
+        h_context_free = sc[1].dimshuffle(1,0,2)
+	h_context_free = h_context_free.reshape((sc[1].shape[0] * sc[1].shape[1], gru1_dim))
+	cw_index = cw_index1 * sc[1].shape[0]+ cw_index2
+	h_context_free = h_context_free[cw_index].reshape((cw_index.shape[0], cw_index.shape[1], gru1_dim))
+	h_context_free = h_context_free.dimshuffle(1,0,2)
+        
+        sc, _ = theano.scan(_gen_word_emb_step, sequences=[h_context_free], outputs_info = [T.zeros((batch_size, emb_dim)), None], name='scan_gen_emb', profile=False)
+
+	word_embs = sc[1]
+
+	sc,_ = theano.scan(word_step, sequences=[word_embs], outputs_info = [T.zeros((batch_size, gru2_dim))], name='scan_word_rnn', profile=False)
+
 	word_out = sc.dimshuffle(1,0,2).reshape((cw_index1.shape[0]*cw_index1.shape[1], gru2_dim))
 	word_out = softmax(model.fc(cur_in = word_out, name = 'fc_word', shape=(gru2_dim, word_out_dim)))
 	word_out = T.clip(word_out, EPSI, 1.0-EPSI)
 
 	f_word_target = word_target[:,1:].reshape((cw_index1.shape[0]*cw_index1.shape[1], ))
-	PPL_word_LM = -T.sum((1. - T.eq(f_word_target, -1)) * T.log(word_out[T.arange(word_out.shape[0]), f_word_target]))
-	cost_word_LM = T.sum((1. -T.eq(f_word_target, -1)) * NN.categorical_crossentropy(word_out, f_word_target))/T.sum(f_word_target>=0)
+	PPL_word_LM = T.sum((1. -T.eq(f_word_target, -1)) * categorical_crossentropy(word_out, f_word_target))
+	cost_word_LM = PPL_word_LM/T.sum(f_word_target>=0)
 	cost_all = cost_word_LM
+
 	if train:
                 grad_all = rmsprop(cost_all, model.weightsPack.getW_list(), lr=1e-3,epsilon=1e-6, ignore_input_disconnect=True)
 		return cost_all, PPL_word_LM, grad_all
 	else:
 		return cost_all, PPL_word_LM
 	
-cost_all, PPL = get_express(train=False, emb_flag='att')
-test_func_att = theano.function([char_in, cw_mask, cw_index1, cw_index2, word_target], [cost_all, PPL], allow_input_downcast=True)
+cost_all, PPL = get_express(train=False)
+test_func_hw = theano.function([char_in, cw_mask, cw_index1, cw_index2, word_target], [cost_all, PPL], allow_input_downcast=True)
 
 print 'TEST COMPILE'
 
 if train_flag :
-    cost_all, PPL, grad_all = get_express(train=True, emb_flag='att')
-    train_func_att = theano.function([char_in, cw_mask, cw_index1, cw_index2, word_target], [cost_all, PPL], updates=grad_all, allow_input_downcast=True)
+    cost_all, PPL, grad_all = get_express(train=True)
+    train_func_hw = theano.function([char_in, cw_mask, cw_index1, cw_index2, word_target], [cost_all, PPL], updates=grad_all, allow_input_downcast=True)
     print 'TRAIN COMPILE'       
 
 train_func = None
 test_func = None
-for i in xrange(400):
-    train_func = train_func_att
-    test_func = test_func_att
+for i in xrange(600):
+    train_func = train_func_hw
+    test_func = test_func_hw
 
     ma_cost = Moving_AVG(500)
     mytime = time.time()
     if train_flag:
         train_batchs = Dataset.train_size/train_batch_size
-        train_batchs = min(1000, train_batchs)  
+        train_batchs = min(2000, train_batchs)  
         for j in xrange(train_batchs):
             data_time = time.time()
             char, char_label, mask, word_index1, word_index2, word_label = Dataset.get_batch(train_batch_size)
+            print 'One Data Time = ', time.time()-data_time
+            batch_time = time.time()
             n_cost, n_ppl = train_func(char, mask, word_index1, word_index2, word_label)
-            #print train_func_all.profile.summary()
+            print 'One Batch Time = ', time.time() - batch_time
             ma_cost.append(n_cost)
             print 'Epoch = ', str(i), ' Batch = ', str(j), ' Cost = ', n_cost, ' PPL = ', NP.exp(n_ppl/NP.sum(word_label[:,1:]>=0)), ' AVG Cost = ', ma_cost.get_avg(), 'LEN = ', NP.shape(char)[1]
+
+        #print train_func.profile.summary()
 	newtime = time.time()
 	print 'One Epoch Time = ', newtime-mytime
 	mytime = newtime
@@ -257,4 +279,5 @@ for i in xrange(400):
         test_wcnt.append(NP.sum(word_label[:,1:]>=0))
         print ' Test Batch = ', str(j), 
     print '\nEpoch = ', str(i), ' Test Word PPL = ', NP.exp(NP.sum(test_wper)/NP.sum(test_wcnt))
+
 
