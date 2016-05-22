@@ -162,7 +162,7 @@ def _gen_word_emb_step(h_context_free, h_before):
 	#gru_emb = model.gru(cur_in = D_emb, rec_in = h_before, name = 'gru_emb', shape = (emb_dim, emb_dim))
 	#return gru_emb, word_emb_att, att
 	h_before = h_before * 0.5 + D_emb * 0.5
-	return h_before, word_emb_att, att
+	return h_before, word_emb_att
 
 def softmax(x):
     e_x = T.exp(x)
