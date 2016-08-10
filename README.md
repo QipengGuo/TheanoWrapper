@@ -1,9 +1,7 @@
 # TheanoWrapper
-Try to make some useful wrappers of theano for RNN 
+Try to make some useful wrappers of theano
 
-# Need theano git version, not 0.7.0 release
-
-#How to use 
+#How to use, some scripts are out of date
 ```python
 
 #these package are necessary in common
