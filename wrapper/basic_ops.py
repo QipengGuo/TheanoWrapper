@@ -4,11 +4,12 @@ import theano
 import theano.tensor as T
 import theano.tensor.nnet as NN
 import initialization as INIT
-#from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
-if theano.config.device[:3]=='cpu':
-    from theano.tensor.shared_randomstreams import RandomStreams
-if theano.config.device[:3]=='gpu':
-    from theano.sandbox.cuda.rng_curand import CURAND_RandomStreams as RandomStreams
+from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
+from theano.tensor.signal import downsample
+#if theano.config.device[:3]=='cpu':
+#    from theano.tensor.shared_randomstreams import RandomStreams
+#if theano.config.device[:3]=='gpu':
+#    from theano.sandbox.cuda.rng_curand import CURAND_RandomStreams as RandomStreams
 
 class Dropout(object):
 	def __init__(self, shape = None, prob=0.5):
@@ -25,7 +26,7 @@ class Dropout(object):
 
 
 class Stuff_list(object):
-    init_name_list = {'uniform':INIT.uniform, 'glorot_uniform':INIT.glorot_uniform, 'orthogonal':INIT.orthogonal}
+    init_name_list = {'uniform':INIT.uniform, 'glorot_uniform':INIT.glorot_uniform, 'orthogonal':INIT.orthogonal, 'zeros':INIT.zeros, 'ones':INIT.ones}
     @staticmethod
     def get_init(init_name):
         assert Stuff_list.init_name_list.has_key(init_name)
@@ -74,31 +75,54 @@ class Ops_with_weights(object):
                     finds += 1
                     break
         return finds == len(self.params)
-'''
-#Do we really need this?
 
-def Ops_without_weights(object):
-    def __init__(self, name = None):
-        self.op_name = op_name
-        self.created = False
+class LinearLN(Ops_with_weights):
+    def __init__(self, name=None, save_weights=True, shape=[], with_bias=True, init_list=['glorot_uniform', 'zeros']):
+        assert len(init_list)==2
+        assert len(shape)==2
+        super(self.__class__, self).__init__(name)
 
-    def create(self):
-        if self.created:
-            return 
-        return NotImplemented
+        in_dim, out_dim = shape
+        self.with_bias = with_bias
+        if with_bias:
+            shape_list = [(in_dim, out_dim), (out_dim,)]
+            name_list = [name+'_W', name+'_b']
+        else:
+            shape_list = [(in_dim, out_dim)]
+            name_list = [name+'_W']
+            init_list = init_list[0:1]
+        shape_list = shape_list + [(in_dim,), (in_dim,)]
+        init_list = init_list + ['ones', 'zeros']
+        name_list = name_list + [name+'_S', name+'_Lb']
+        self.create(save_weights=save_weights, init_list=init_list, name_list=name_list, shape_list=shape_list)
 
-    def perform(self):
-        return NotImplemented
-
-    def get_updates(self):
-        return None
-
-    def get_params(self):
-        return None
-'''
+    def perform(self, x):
+        EPSI = 1e-5
+        W = self.params[0]
+        if self.with_bias:
+            b = self.params[1]
+            S = self.params[2]
+            Lb = self.params[3]
+            x_ln = (x - T.mean(x, axis=-1, keepdims=True))/T.sqrt(T.var(x, axis=-1, keepdims=True)+EPSI)
+            if x.ndim==3:
+                x_ln = x_ln * S.dimshuffle('x', 'x', 0) + Lb.dimshuffle('x', 'x', 0)
+                return batched_dot3(x_ln, W.dimshuffle('x', 0, 1)) + b.dimshuffle('x', 0)
+            else:
+                x_ln = x_ln * S.dimshuffle('x', 0) + Lb.dimshuffle('x', 0)
+                return T.dot(x_ln, W) + b
+        else:
+            S = self.params[1]
+            Lb = self.params[2]
+            x_ln = (x - T.mean(x, axis=-1, keepdims=True))/T.sqrt(T.var(x, axis=-1, keepdims=True)+EPSI)
+            if x.ndim==3:
+                x_ln = x_ln * S.dimshuffle('x', 'x', 0) + Lb.dimshuffle('x', 'x', 0)
+                return batched_dot3(x_ln, W.dimshuffle('x', 0, 1))
+            else:
+                x_ln = x_ln * S.dimshuffle('x', 0) + Lb.dimshuffle('x', 0)
+                return T.dot(x_ln, W)
 
 class Linear(Ops_with_weights):
-    def __init__(self, name=None, save_weights=True, shape=[], with_bias=True, init_list=['glorot_uniform', 'glorot_uniform']):
+    def __init__(self, name=None, save_weights=True, shape=[], with_bias=True, init_list=['glorot_uniform', 'zeros']):
         assert len(init_list)==2
         assert len(shape)==2
         super(self.__class__, self).__init__(name)
@@ -128,11 +152,119 @@ class Linear(Ops_with_weights):
             else:
                 return T.dot(x, W)
 
-class Conv(Ops_with_weights):
-    pass
 
-class Pool(object):
-    pass
+class LayerNorm(Ops_with_weights):
+    def __init__(self, name=None, save_weights=True, shape=[], init_list=['ones', 'zeros']):
+        assert len(init_list)==2
+        assert len(shape)==1
+        super(self.__class__, self).__init__(name)
+
+        dim = shape
+        shape_list = [(dim,), (dim,)]
+        name_list = [name+'_S', name+'_b']
+
+        self.create(save_weights=save_weights, init_list=init_list, name_list=name_list, shape_list=shape_list)
+
+    def perform(self, x):
+        EPSI = 1e-5
+
+        S = self.params[0]
+        b = self.params[1]
+
+        x_ln = (x - T.mean(x_ln, axis=-1, keepdims=True))/T.sqrt(T.var(x, axis=-1, keepdims=True)+EPSI)
+        if x.ndim==3:
+            return x_ln * S.dimshuffle('x', 'x', 0) + b.dimshuffle('x', 'x', 0)
+        else:
+            return x_ln * S.dimshuffle('x', 0) + b.dimshuffle('x', 0)
+
+
+class DRelu(Ops_with_weights):
+    def __init__(self, name=None, save_weights=True, shape=[], init_list=['ones']):
+        assert len(init_list)==1
+        assert len(shape)==1
+        super(self.__class__, self).__init__(name)
+
+        dim = shape[0]
+        shape_list = [(dim,), (dim,)]
+        name_list = [name+'_Pmax', name+'_Pmin']
+
+        self.create(save_weights=save_weights, init_list=init_list, name_list=name_list, shape_list=shape_list)
+
+    def perform(self, x):
+
+        Pmax = self.params[0]
+        Pmin = self.params[1]
+
+        if x.ndim==3:
+            Pmin = Pmin.dimshuffle('x', 'x', 0)
+            Pmax = Pmax.dimshuffle('x', 'x', 0)
+            return T.minimum(T.maximum(Pmin, x), Pmax)
+        else:
+            Pmin = Pmin.dimshuffle('x', 0)
+            Pmax = Pmax.dimshuffle('x', 0)
+            return T.minimum(T.maximum(Pmin, x), Pmax)
+
+class DRelu_scaled(Ops_with_weights):
+    def __init__(self, name=None, save_weights=True, shape=[], init_list=['ones']):
+        assert len(init_list)==1
+        assert len(shape)==1
+        super(self.__class__, self).__init__(name)
+
+        dim = shape[0]
+        shape_list = [(dim,), (dim,)]
+        name_list = [name+'_Pmax', name+'_Pmin']
+
+        self.create(save_weights=save_weights, init_list=init_list, name_list=name_list, shape_list=shape_list)
+
+    def perform(self, x):
+
+        EPSI = 1e-6
+        Pmax = self.params[0]
+        Pmin = self.params[1]
+
+        if x.ndim==3:
+            Pmin = Pmin.dimshuffle('x', 'x', 0)
+            Pmax = Pmax.dimshuffle('x', 'x', 0)
+            return (T.minimum(T.maximum(Pmin, x), Pmax)-Pmin)/(Pmax-Pmin+EPSI)
+        else:
+            Pmin = Pmin.dimshuffle('x', 0)
+            Pmax = Pmax.dimshuffle('x', 0)
+            return (T.minimum(T.maximum(Pmin, x), Pmax)-Pmin)/(Pmax-Pmin+EPSI)
+
+conv2d = NN.conv2d
+if theano.config.device[:3] == 'gpu':
+    import theano.sandbox.cuda.dnn as CUDNN
+    if CUDNN.dnn_available():
+        print 'Using CUDNN instead of Theano conv2d'
+        conv2d = CUDNN.dnn_conv
+
+class Conv(Ops_with_weights):
+    def __init__(self, name=None, save_weigths=True, shape=[], init_list=['glorot_uniform']):
+        assert len(init_list)==1
+        assert len(shape)==6
+        super(self.__class__, self).__init__(name)
+        
+        nr_filters, nr_channels, filter_row, filter_col, self.conv_stride_row, self.conv_stride_col = shape
+        shape_list = [(nr_filters, nr_channels, filter_row, filter_col)]
+        name_list = [name+'_conv_W']
+        self.create(save_weights=save_weights, init_list=init_list, name_list=name_list, shape_list=shape_list)
+
+    def perform(self, x):
+        conv_h = conv2d(x, self.params[0], subsample=(self.conv_stride_row, self.conv_stride_col))
+        return conv_h
+
+class Pooling(object):
+    def __init__(self, name=None, shape=[]):
+        assert len(init_list)==1
+        assert len(shape)==2
+        self.name=name
+        self.pool_shape=shape
+        self.p=self.perform
+
+    def perform(self, x):
+        pool_h = downsample.max_pool_2d(x, self.pool_shape, ignore_border=True)
+        return pool_h
+   
 
 class Fetch(Ops_with_weights):
     def __init__(self, name=None, save_weights=True, shape=[], init_list=['uniform']):
@@ -244,6 +376,3 @@ def log_softmax():
 
 def fast_softmax():
     pass
-
-
-

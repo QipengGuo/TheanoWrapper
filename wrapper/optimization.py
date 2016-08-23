@@ -3,7 +3,7 @@ import theano.tensor as T
 import numpy as NP
 
 def pure_sgd(cost, params, lr, rescale=1., ignore_input_disconnect=False):  #lr and iterations must be theano variable
-    grads = theano.grad(cost*20, params, disconnected_inputs='ignore' if ignore_input_disconnect else 'raise')
+    grads = theano.grad(cost, params, disconnected_inputs='ignore' if ignore_input_disconnect else 'raise')
     grad_norm = T.sqrt(sum(map(lambda x:T.sqr(x).sum(), grads)))
 
     updates = []
@@ -14,7 +14,7 @@ def pure_sgd(cost, params, lr, rescale=1., ignore_input_disconnect=False):  #lr 
         new_norm = new_norm + T.sqr(g).sum()
         new_p = p - lr * g
         updates.append((p, new_p))
-    return updates, T.round(grad_norm)*1000+T.sqrt(new_norm)
+    return updates
 
 def sgd(cost, params, lr, iterations, momentum=0.9, decay=0.05):  #lr and iterations must be theano variable
     grads = theano.grad(cost, params)

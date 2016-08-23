@@ -2,8 +2,14 @@ import numpy as NP
 import theano
 import numpy.random as RNG
 
-def uniform(shape, low=-0.05, high=0.05):
-	return NP.cast[theano.config.floatX](RNG.uniform(low=low, high=high, size=shape))
+def ones(shape):
+    return NP.cast[theano.config.floatX](NP.ones(shape))
+
+def zeros(shape):
+    return NP.cast[theano.config.floatX](NP.zeros(shape))
+
+def uniform(shape, low=-0.5, high=0.5):
+    return NP.cast[theano.config.floatX](RNG.uniform(low=low, high=high, size=shape))
 
 def get_fans(shape):
     '''

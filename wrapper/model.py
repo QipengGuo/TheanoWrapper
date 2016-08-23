@@ -15,7 +15,6 @@ class saved_param(object):
         params_size = 0
         for tp in theano_data_list:
             params_size += NP.prod(NP.shape(tp.get_value()))
-            #print tp.name, NP.shape(tp.get_value())
             h5file[tp.name] = tp.get_value()
         print 'Saving model, total size = ', params_size
 
@@ -46,9 +45,15 @@ class LayersPack(object):
     def keys(self):
         return self.idxs.keys()
     
-    def get_params(self):
+    def get_params(self, ignore_list=[], given_list=[]):
         ret_list = []
-        for v in self.idxs.values():
+        for n, v in zip(self.idxs.keys(),self.idxs.values()):
+            if len(given_list):
+                if n not in given_list:
+                    continue
+            if n in ignore_list:
+                print 'SKIP ', n
+                continue
             assert hasattr(v, 'get_params')
             ret_list = ret_list + v.get_params()
         return ret_list
@@ -89,8 +94,8 @@ class Model(object):
     def load(self, path):
         self.layersPack.load(path+'.h5')
 
-    def get_params(self):
-        return self.layersPack.get_params()
+    def get_params(self, ignore_list=[], given_list=[]):
+        return self.layersPack.get_params(ignore_list=ignore_list, given_list=given_list)
 
     def get_updates(self):
         return self.layersPack.get_updates()
@@ -98,20 +103,39 @@ class Model(object):
     def clear_state(self):
         self.layersPack.clear_state()
 
-    def fc(self, x_in=None, name=None, shape=None, init_list=None):
-        return get_layer(self, name=name, layer_type='fc', shape=shape, init_list=init_list).perform(x_in)
+    def fc(self, x_in=None, name=None, shape=None, **kwargs):
+        return get_layer(self, name=name, layer_type='fc', shape=shape, **kwargs).perform(x_in)
 
-    def h_softmax(self, x_in=None, y_in=None, name=None, shape=None, init_list=None):
-        return get_layer(self, name=name, layer_type='h_softmax', shape=shape, init_list=init_list).perform(x_in, y_in)
+    def h_softmax(self, x_in=None, y_in=None, name=None, shape=None, **kwargs):
+        return get_layer(self, name=name, layer_type='h_softmax', shape=shape, **kwargs).perform(x_in, y_in)
 
-    def gru_seq(self, x_in=None, rec_in=None, name=None, shape=None, init_list=None):
-        return get_layer(self, name=name, layer_type='gru_seq', shape=shape, init_list=init_list).perform(x_in, rec_in)
+    def gru_seq(self, x_in=None, rec_in=None, name=None, shape=None, **kwargs):
+        return get_layer(self, name=name, layer_type='gru_seq', shape=shape, **kwargs).perform(x_in, rec_in)
     gru = gru_seq
 
-    def gru_flatten(self, x_in=None, name=None, shape=None, init_list=None, return_seq=True, keep_state=0):
-        return get_layer(self, name=name, layer_type='gru_flatten', shape=shape, init_list=init_list, keep_state=keep_state).perform(x_in, return_seq)
+    def gru_flatten(self, x_in=None, name=None, shape=None, return_seq=True, **kwargs):
+        return get_layer(self, name=name, layer_type='gru_flatten', shape=shape, **kwargs).perform(x_in, return_seq)
 
     gru_flat = gru_flatten
 
-    def embedding(self, x_in=None, name=None, shape=None, init_list=None):
-        return get_layer(self, name=name, layer_type='embedding', shape=shape, init_list=init_list).perform(x_in)
+    def lstm_flatten(self, x_in=None, name=None, shape=None, return_seq=True, **kwargs):
+        return get_layer(self, name=name, layer_type='lstm_flatten', shape=shape, **kwargs).perform(x_in, return_seq)
+
+    lstm_flat = lstm_flatten
+
+    def embedding(self, x_in=None, name=None, shape=None, **kwargs):
+        return get_layer(self, name=name, layer_type='embedding', shape=shape, **kwargs).perform(x_in)
+
+    def Wmatrix(self, name=None, shape=None, **kwargs):
+        return get_layer(self, name=name, layer_type='Wmatrix', shape=shape, **kwargs).perform()
+
+    def attention(self, x_in=None, h_in=None, name=None, shape=None, **kwargs):
+        return get_layer(self, name=name, layer_type='attention', shape=shape, **kwargs).perform(x_in, h_in)
+
+    def DRelu(self, x_in=None, name=None, shape=None, only_func=False, **kwargs):
+        return get_layer(self, name=name, layer_type='DRelu', shape=shape, **kwargs).perform if only_func else get_layer(self, name=name, layer_type='DRelu', shape=shape, **kwargs).perform(x_in)
+
+    def DRelu_scaled(self, x_in=None, name=None, shape=None, only_func=False, **kwargs):
+        return get_layer(self, name=name, layer_type='DRelu_scaled', shape=shape, **kwargs).perform if only_func else get_layer(self, name=name, layer_type='DRelu_scaled', shape=shape, **kwargs).perform(x_in)
+
+
