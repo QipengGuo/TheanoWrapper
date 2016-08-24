@@ -21,4 +21,4 @@ def relu(x):
 	return T.switch(x>0.0, x, 0.0)
 
 def relu_leak(x, neg_coef=0.1):
-	return T.swtich(x>0.0, x, neg_coef*x)
+	return T.switch(x>0.0, x, neg_coef*x)

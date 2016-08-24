@@ -99,8 +99,8 @@ class lstm_seq(Layer):
         assert len(shape)==2
         super(self.__class__, self).__init__(model, name=name, layer_type=layer_type)
         _Linear = LinearLN if linear_mode=='LN' else Linear
-        self.f_act = sigmoid if f_act is None else f_act
-        self.f_inner_act = tanh if f_inner_act is None else f_inner_act
+        self.f_act = tanh if f_act is None else f_act
+        self.f_inner_act = sigmoid if f_inner_act is None else f_inner_act
         self.name=name
         in_dim, out_dim = shape
         self.in_dim, self.out_dim = in_dim, out_dim
@@ -147,8 +147,8 @@ class gru_seq(Layer):
         assert len(shape)==2
         super(self.__class__, self).__init__(model, name=name, layer_type=layer_type)
 	_Linear = LinearLN if linear_mode=='LN' else Linear
-	self.f_act = sigmoid if f_act is None else f_act
-	self.f_inner_act = tanh if f_inner_act is None else f_inner_act
+	self.f_act = tanh if f_act is None else f_act
+	self.f_inner_act = sigmoid if f_inner_act is None else f_inner_act
         in_dim, out_dim = shape
         if not self.created:
             if init_list is not None:
@@ -184,8 +184,8 @@ class lstm_flatten(Layer):
         assert len(shape)==2
         super(self.__class__, self).__init__(model, name=name, layer_type=layer_type)
         _Linear = LinearLN if linear_mode=='LN' else Linear
-        self.f_act = sigmoid if f_act is None else f_act
-        self.f_inner_act = tanh if f_inner_act is None else f_inner_act
+        self.f_act = tanh if f_act is None else f_act
+        self.f_inner_act = sigmoid if f_inner_act is None else f_inner_act
         self.name=name
         in_dim, out_dim = shape
         self.in_dim, self.out_dim = in_dim, out_dim
@@ -254,8 +254,8 @@ class gru_flatten(Layer):
         assert len(shape)==2
         super(self.__class__, self).__init__(model, name=name, layer_type=layer_type)
 	_Linear = LinearLN if linear_mode=='LN' else Linear
-	self.f_act = sigmoid if f_act is None else f_act
-	self.f_inner_act = tanh if f_inner_act is None else f_inner_act
+	self.f_act = tanh if f_act is None else f_act
+	self.f_inner_act = sigmoid if f_inner_act is None else f_inner_act
         self.name=name
         in_dim, out_dim = shape
         self.in_dim, self.out_dim = in_dim, out_dim

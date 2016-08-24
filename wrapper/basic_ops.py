@@ -5,7 +5,7 @@ import theano.tensor as T
 import theano.tensor.nnet as NN
 import initialization as INIT
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
-from theano.tensor.signal import downsample
+from theano.tensor.signal.pool import pool_2d
 #if theano.config.device[:3]=='cpu':
 #    from theano.tensor.shared_randomstreams import RandomStreams
 #if theano.config.device[:3]=='gpu':
@@ -26,7 +26,7 @@ class Dropout(object):
 
 
 class Stuff_list(object):
-    init_name_list = {'uniform':INIT.uniform, 'glorot_uniform':INIT.glorot_uniform, 'orthogonal':INIT.orthogonal, 'zeros':INIT.zeros, 'ones':INIT.ones}
+    init_name_list = {'uniform':INIT.uniform, 'glorot_uniform':INIT.glorot_uniform, 'orthogonal':INIT.orthogonal, 'zeros':INIT.zeros, 'ones':INIT.ones, 'mones':INIT.mones}
     @staticmethod
     def get_init(init_name):
         assert Stuff_list.init_name_list.has_key(init_name)
@@ -179,8 +179,8 @@ class LayerNorm(Ops_with_weights):
 
 
 class DRelu(Ops_with_weights):
-    def __init__(self, name=None, save_weights=True, shape=[], init_list=['ones']):
-        assert len(init_list)==1
+    def __init__(self, name=None, save_weights=True, shape=[], init_list=['ones', 'mones']):
+        assert len(init_list)==2
         assert len(shape)==1
         super(self.__class__, self).__init__(name)
 
@@ -205,8 +205,8 @@ class DRelu(Ops_with_weights):
             return T.minimum(T.maximum(Pmin, x), Pmax)
 
 class DRelu_scaled(Ops_with_weights):
-    def __init__(self, name=None, save_weights=True, shape=[], init_list=['ones']):
-        assert len(init_list)==1
+    def __init__(self, name=None, save_weights=True, shape=[], init_list=['ones', 'mones']):
+        assert len(init_list)==2
         assert len(shape)==1
         super(self.__class__, self).__init__(name)
 
@@ -262,7 +262,7 @@ class Pooling(object):
         self.p=self.perform
 
     def perform(self, x):
-        pool_h = downsample.max_pool_2d(x, self.pool_shape, ignore_border=True)
+        pool_h = pool_2d(x, self.pool_shape, ignore_border=True)
         return pool_h
    
 

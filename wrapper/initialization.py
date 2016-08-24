@@ -5,6 +5,9 @@ import numpy.random as RNG
 def ones(shape):
     return NP.cast[theano.config.floatX](NP.ones(shape))
 
+def mones(shape):
+    return NP.cast[theano.config.floatX](-1.0*NP.ones(shape))
+
 def zeros(shape):
     return NP.cast[theano.config.floatX](NP.zeros(shape))
 
