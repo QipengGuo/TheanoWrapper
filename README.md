@@ -1,7 +1,7 @@
 # TheanoWrapper
 An easy-to-use wrapper of theano
 
-#How to use, some scripts are out of date
+#How to use
 ```python
 
 #these package are necessary in common
@@ -21,7 +21,6 @@ label = T.matrix()
 
 model = Model() #declare a model 
 
-model.load('abc') # load everywhere
 
 #define network working flow
 def _step(X):
@@ -37,11 +36,12 @@ rms = rmsprop(cost, model.weightsPack.getW_list(), lr=1e-2, epsilon=1e-4) #defin
 train_func = theano.function([in_data, label], [loss, net_out], updates=rms, allow_input_downcast=True)
 test_func = theano.function([in_data, label], [loss, net_out], allow_input_downcast=True)
 
+model.load('abc') # load should appear after the model construction
+
 #one epoch, seen each training sample once
 train_cost, _ = auto_batch(train_func, train_batch_size, train_data, train_label) # train_data, train_label is the real data
 test_cost, _ = auto_batch(test_func, test_batch_size, test_data, test_label)
 
-model.save('abc') #save the model in npz format, the network can't share saved file between cpu and gpu at now
-
+model.save('abc') #save the model in h5py format
 ```
 

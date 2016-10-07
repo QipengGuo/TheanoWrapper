@@ -1,6 +1,16 @@
-from layer import get_layer
+import layer
 import numpy as NP
 import h5py
+
+def get_layer(model, name=None, layer_type='', **kwargs):
+    assert hasattr(model, 'layersPack')
+    if model.layersPack.has(name):
+        return model.layersPack.get(name)
+    else:
+        tar_layer = getattr(layer,layer_type,None)
+        assert tar_layer is not None
+        print name, kwargs
+        return tar_layer(model, name=name, layer_type=layer_type, **kwargs)
 
 class saved_param(object):
     def __init__(self, name, data):

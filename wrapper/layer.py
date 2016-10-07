@@ -69,14 +69,11 @@ class drelu_scaled(Layer):
 	return self.ops[0].p(x)
 
 class fully_connect(Layer):
-    def __init__(self, model, name=None, layer_type='fully_connect', shape=[], init_list=None, linear_mode=None):
+    def __init__(self, model, name=None, layer_type='fully_connect', shape=[], init_list=None, linear_mode=None, with_bias=True):
         super(self.__class__, self).__init__(model, name=name, layer_type=layer_type)
 	_Linear = LinearLN if linear_mode=='LN' else Linear
         if not self.created:
-            if init_list is not None:
-                self.ops.append(_Linear(name=name+'_Linear', shape=shape, init_list=init_list))
-            else:
-                self.ops.append(_Linear(name=name+'_Linear', shape=shape))
+            self.ops.append(_Linear(name=name+'_Linear', shape=shape, init_list=init_list if init_list is not None, with_bias=with_bias))
 
     def perform(self, x):
         L_trans = self.ops[0].p
@@ -86,10 +83,7 @@ class h_softmax(Layer):
     def __init__(self, model, name=None, layer_type='h_softmax', shape=[], init_list=None):
         super(self.__class__, self).__init__(model, name=name, layer_type=layer_type)
         if not self.created:
-            if init_list is not None:
-                self.ops.append(H_Softmax(name=name+'_H_Softmax', shape=shape, init_list=init_list))
-            else:
-                self.ops.append(H_Softmax(name=name+'_H_Softmax', shape=shape))
+            self.ops.append(H_Softmax(name=name+'_H_Softmax', shape=shape, init_list=init_list if init_list is not None))
 
     def perform(self, x, y=None):
         return self.ops[0].p(x, y)
@@ -105,26 +99,15 @@ class lstm_seq(Layer):
         in_dim, out_dim = shape
         self.in_dim, self.out_dim = in_dim, out_dim
         if not self.created:
-            if init_list is not None:
-                assert init_list_inner is not None
-                self.ops.append(_Linear(name=name+'_Linear_i_Wb', shape=(in_dim, out_dim), init_list=init_list))
-                self.ops.append(_Linear(name=name+'_Linear_i_U', shape=(out_dim, out_dim), init_list=init_list_inner, with_bias=False))
-                self.ops.append(_Linear(name=name+'_Linear_o_Wb', shape=(in_dim, out_dim), init_list=init_list))
-                self.ops.append(_Linear(name=name+'_Linear_o_U', shape=(out_dim, out_dim), init_list=init_list_inner, with_bias=False))
-                self.ops.append(_Linear(name=name+'_Linear_f_Wb', shape=(in_dim, out_dim), init_list=init_list))
-                self.ops.append(_Linear(name=name+'_Linear_f_U', shape=(out_dim, out_dim), init_list=init_list_inner, with_bias=False))
-                self.ops.append(_Linear(name=name+'_Linear_c_Wb', shape=(in_dim, out_dim), init_list=init_list))
-                self.ops.append(_Linear(name=name+'_Linear_c_U', shape=(out_dim, out_dim), init_list=init_list_inner, with_bias=False))
+            self.ops.append(_Linear(name=name+'_Linear_i_Wb', shape=(in_dim, out_dim), init_list=init_list if init_list is not None else ['glorot_uniform', 'zeros']))
+            self.ops.append(_Linear(name=name+'_Linear_i_U', shape=(out_dim, out_dim), init_list=init_list_inner if init_list_inner is not None else ['orthogonal', 'zeros'], with_bias=False))
+            self.ops.append(_Linear(name=name+'_Linear_o_Wb', shape=(in_dim, out_dim), init_list=init_list if init_list is not None else ['glorot_uniform', 'zeros']))
+            self.ops.append(_Linear(name=name+'_Linear_o_U', shape=(out_dim, out_dim), init_list=init_list_inner if init_list_inner is not None else ['orthogonal', 'zeros'], with_bias=False))
+            self.ops.append(_Linear(name=name+'_Linear_f_Wb', shape=(in_dim, out_dim), init_list=init_list if init_list is not None else ['glorot_uniform', 'zeros']))
+            self.ops.append(_Linear(name=name+'_Linear_f_U', shape=(out_dim, out_dim), init_list=init_list_inner if init_list_inner is not None else ['orthogonal', 'zeros'], with_bias=False))
+            self.ops.append(_Linear(name=name+'_Linear_c_Wb', shape=(in_dim, out_dim), init_list=init_list if init_list is not None else ['glorot_uniform', 'zeros']))
+            self.ops.append(_Linear(name=name+'_Linear_c_U', shape=(out_dim, out_dim), init_list=init_list_inner if init_list_inner is not None else ['orthogonal', 'zeros'], with_bias=False))
 
-            else:
-                self.ops.append(_Linear(name=name+'_Linear_i_Wb', shape=(in_dim, out_dim), init_list=['glorot_uniform', 'zeros']))
-                self.ops.append(_Linear(name=name+'_Linear_i_U', shape=(out_dim, out_dim), init_list=['orthogonal', 'zeros'], with_bias=False))
-                self.ops.append(_Linear(name=name+'_Linear_o_Wb', shape=(in_dim, out_dim), init_list=['glorot_uniform', 'zeros']))
-                self.ops.append(_Linear(name=name+'_Linear_o_U', shape=(out_dim, out_dim), init_list=['orthogonal', 'zeros'], with_bias=False))
-                self.ops.append(_Linear(name=name+'_Linear_f_Wb', shape=(in_dim, out_dim), init_list=['glorot_uniform', 'zeros']))
-                self.ops.append(_Linear(name=name+'_Linear_f_U', shape=(out_dim, out_dim), init_list=['orthogonal', 'zeros'], with_bias=False))
-                self.ops.append(_Linear(name=name+'_Linear_c_Wb', shape=(in_dim, out_dim), init_list=['glorot_uniform', 'zeros']))
-                self.ops.append(_Linear(name=name+'_Linear_c_U', shape=(out_dim, out_dim), init_list=['orthogonal', 'zeros'], with_bias=False))
 
     def perform(self, x, cm1):
         ops = self.ops
@@ -151,21 +134,12 @@ class gru_seq(Layer):
 	self.f_inner_act = sigmoid if f_inner_act is None else f_inner_act
         in_dim, out_dim = shape
         if not self.created:
-            if init_list is not None:
-                assert init_list_inner is not None
-                self.ops.append(_Linear(name=name+'_Linear_z_Wb', shape=(in_dim, out_dim), init_list=init_list))
-                self.ops.append(_Linear(name=name+'_Linear_z_U', shape=(out_dim, out_dim), init_list=init_list_inner, with_bias=False))
-                self.ops.append(_Linear(name=name+'_Linear_r_Wb', shape=(in_dim, out_dim), init_list=init_list))
-                self.ops.append(_Linear(name=name+'_Linear_r_U', shape=(out_dim, out_dim), init_list=init_list_inner, with_bias=False))
-                self.ops.append(_Linear(name=name+'_Linear_h_Wb', shape=(in_dim, out_dim), init_list=init_list))
-                self.ops.append(_Linear(name=name+'_Linear_h_U', shape=(out_dim, out_dim), init_list=init_list_inner, with_bias=False))
-            else:
-                self.ops.append(_Linear(name=name+'_Linear_z_Wb', shape=(in_dim, out_dim), init_list=['glorot_uniform', 'zeros']))
-                self.ops.append(_Linear(name=name+'_Linear_z_U', shape=(out_dim, out_dim), init_list=['orthogonal', 'zeros'], with_bias=False))
-                self.ops.append(_Linear(name=name+'_Linear_r_Wb', shape=(in_dim, out_dim), init_list=['glorot_uniform', 'zeros']))
-                self.ops.append(_Linear(name=name+'_Linear_r_U', shape=(out_dim, out_dim), init_list=['orthogonal', 'zeros'], with_bias=False))
-                self.ops.append(_Linear(name=name+'_Linear_h_Wb', shape=(in_dim, out_dim), init_list=['glorot_uniform', 'zeros']))
-                self.ops.append(_Linear(name=name+'_Linear_h_U', shape=(out_dim, out_dim), init_list=['orthogonal', 'zeros'], with_bias=False))
+            self.ops.append(_Linear(name=name+'_Linear_z_Wb', shape=(in_dim, out_dim), init_list=init_list if init_list is not None else ['glorot_uniform', 'zeros']))
+            self.ops.append(_Linear(name=name+'_Linear_z_U', shape=(out_dim, out_dim), init_list=init_list_inner if init_list_inner is not None else ['orthogonal', 'zeros'], with_bias=False))
+            self.ops.append(_Linear(name=name+'_Linear_r_Wb', shape=(in_dim, out_dim), init_list=init_list if init_list is not None else ['glorot_uniform', 'zeros']))
+            self.ops.append(_Linear(name=name+'_Linear_r_U', shape=(out_dim, out_dim), init_list=init_list_inner if init_list_inner is not None else ['orthogonal', 'zeros'], with_bias=False))
+            self.ops.append(_Linear(name=name+'_Linear_h_Wb', shape=(in_dim, out_dim), init_list=init_list if init_list is not None else ['glorot_uniform', 'zeros']))
+            self.ops.append(_Linear(name=name+'_Linear_h_U', shape=(out_dim, out_dim), init_list=init_list_inner if init_list_inner is not None else ['orthogonal', 'zeros'], with_bias=False))
 
     def perform(self, x, hm1):
         ops = self.ops
@@ -192,26 +166,14 @@ class lstm_flatten(Layer):
         self.state = None
         self.keep_state=keep_state
         if not self.created:
-            if init_list is not None:
-                assert init_list_inner is not None
-                self.ops.append(_Linear(name=name+'_Linear_i_Wb', shape=(in_dim, out_dim), init_list=init_list))
-                self.ops.append(_Linear(name=name+'_Linear_i_U', shape=(out_dim, out_dim), init_list=init_list_inner, with_bias=False))
-                self.ops.append(_Linear(name=name+'_Linear_o_Wb', shape=(in_dim, out_dim), init_list=init_list))
-                self.ops.append(_Linear(name=name+'_Linear_o_U', shape=(out_dim, out_dim), init_list=init_list_inner, with_bias=False))
-                self.ops.append(_Linear(name=name+'_Linear_f_Wb', shape=(in_dim, out_dim), init_list=init_list))
-                self.ops.append(_Linear(name=name+'_Linear_f_U', shape=(out_dim, out_dim), init_list=init_list_inner, with_bias=False))
-                self.ops.append(_Linear(name=name+'_Linear_c_Wb', shape=(in_dim, out_dim), init_list=init_list))
-                self.ops.append(_Linear(name=name+'_Linear_c_U', shape=(out_dim, out_dim), init_list=init_list_inner, with_bias=False))
-
-            else:
-                self.ops.append(_Linear(name=name+'_Linear_i_Wb', shape=(in_dim, out_dim), init_list=['glorot_uniform', 'zeros']))
-                self.ops.append(_Linear(name=name+'_Linear_i_U', shape=(out_dim, out_dim), init_list=['orthogonal', 'zeros'], with_bias=False))
-                self.ops.append(_Linear(name=name+'_Linear_o_Wb', shape=(in_dim, out_dim), init_list=['glorot_uniform', 'zeros']))
-                self.ops.append(_Linear(name=name+'_Linear_o_U', shape=(out_dim, out_dim), init_list=['orthogonal', 'zeros'], with_bias=False))
-                self.ops.append(_Linear(name=name+'_Linear_f_Wb', shape=(in_dim, out_dim), init_list=['glorot_uniform', 'zeros']))
-                self.ops.append(_Linear(name=name+'_Linear_f_U', shape=(out_dim, out_dim), init_list=['orthogonal', 'zeros'], with_bias=False))
-                self.ops.append(_Linear(name=name+'_Linear_c_Wb', shape=(in_dim, out_dim), init_list=['glorot_uniform', 'zeros']))
-                self.ops.append(_Linear(name=name+'_Linear_c_U', shape=(out_dim, out_dim), init_list=['orthogonal', 'zeros'], with_bias=False))
+            self.ops.append(_Linear(name=name+'_Linear_i_Wb', shape=(in_dim, out_dim), init_list=init_list if init_list is not None else ['glorot_uniform', 'zeros']))
+            self.ops.append(_Linear(name=name+'_Linear_i_U', shape=(out_dim, out_dim), init_list=init_list_inner if init_list_inner is not None else ['orthogonal', 'zeros'], with_bias=False))
+            self.ops.append(_Linear(name=name+'_Linear_o_Wb', shape=(in_dim, out_dim), init_list=init_list if init_list is not None else ['glorot_uniform', 'zeros']))
+            self.ops.append(_Linear(name=name+'_Linear_o_U', shape=(out_dim, out_dim), init_list=init_list_inner if init_list_inner is not None else ['orthogonal', 'zeros'], with_bias=False))
+            self.ops.append(_Linear(name=name+'_Linear_f_Wb', shape=(in_dim, out_dim), init_list=init_list if init_list is not None else ['glorot_uniform', 'zeros']))
+            self.ops.append(_Linear(name=name+'_Linear_f_U', shape=(out_dim, out_dim), init_list=init_list_inner if init_list_inner is not None else ['orthogonal', 'zeros'], with_bias=False))
+            self.ops.append(_Linear(name=name+'_Linear_c_Wb', shape=(in_dim, out_dim), init_list=init_list if init_list is not None else ['glorot_uniform', 'zeros']))
+            self.ops.append(_Linear(name=name+'_Linear_c_U', shape=(out_dim, out_dim), init_list=init_list_inner if init_list_inner is not None else ['orthogonal', 'zeros'], with_bias=False))
 
 
     def step(self, i_wx, o_wx, f_wx, c_wx, cm1, hm1):
@@ -262,21 +224,12 @@ class gru_flatten(Layer):
         self.state = None
         self.keep_state=keep_state
         if not self.created:
-            if init_list is not None:
-                assert init_list_inner is not None
-                self.ops.append(_Linear(name=name+'_Linear_z_Wb', shape=(in_dim, out_dim), init_list=init_list))
-                self.ops.append(_Linear(name=name+'_Linear_z_U', shape=(out_dim, out_dim), init_list=init_list_inner, with_bias=False))
-                self.ops.append(_Linear(name=name+'_Linear_r_Wb', shape=(in_dim, out_dim), init_list=init_list))
-                self.ops.append(_Linear(name=name+'_Linear_r_U', shape=(out_dim, out_dim), init_list=init_list_inner, with_bias=False))
-                self.ops.append(_Linear(name=name+'_Linear_h_Wb', shape=(in_dim, out_dim), init_list=init_list))
-                self.ops.append(_Linear(name=name+'_Linear_h_U', shape=(out_dim, out_dim), init_list=init_list_inner, with_bias=False))
-            else:
-                self.ops.append(_Linear(name=name+'_Linear_z_Wb', shape=(in_dim, out_dim), init_list=['glorot_uniform', 'zeros']))
-                self.ops.append(_Linear(name=name+'_Linear_z_U', shape=(out_dim, out_dim), init_list=['orthogonal', 'zeros'], with_bias=False))
-                self.ops.append(_Linear(name=name+'_Linear_r_Wb', shape=(in_dim, out_dim), init_list=['glorot_uniform', 'zeros']))
-                self.ops.append(_Linear(name=name+'_Linear_r_U', shape=(out_dim, out_dim), init_list=['orthogonal', 'zeros'], with_bias=False))
-                self.ops.append(_Linear(name=name+'_Linear_h_Wb', shape=(in_dim, out_dim), init_list=['glorot_uniform', 'zeros']))
-                self.ops.append(_Linear(name=name+'_Linear_h_U', shape=(out_dim, out_dim), init_list=['orthogonal', 'zeros'], with_bias=False))
+            self.ops.append(_Linear(name=name+'_Linear_z_Wb', shape=(in_dim, out_dim), init_list=init_list if init_list is not None else ['glorot_uniform', 'zeros']))
+            self.ops.append(_Linear(name=name+'_Linear_z_U', shape=(out_dim, out_dim), init_list=init_list_inner if init_list_inner is not None else ['orthogonal', 'zeros'], with_bias=False))
+            self.ops.append(_Linear(name=name+'_Linear_r_Wb', shape=(in_dim, out_dim), init_list=init_list if init_list is not None else ['glorot_uniform', 'zeros']))
+            self.ops.append(_Linear(name=name+'_Linear_r_U', shape=(out_dim, out_dim), init_list=init_list_inner if init_list_inner is not None else ['orthogonal', 'zeros'], with_bias=False))
+            self.ops.append(_Linear(name=name+'_Linear_h_Wb', shape=(in_dim, out_dim), init_list=init_list if init_list is not None else ['glorot_uniform', 'zeros']))
+            self.ops.append(_Linear(name=name+'_Linear_h_U', shape=(out_dim, out_dim), init_list=init_list_inner if init_list_inner is not None else ['orthogonal', 'zeros'], with_bias=False))
 
     def step(self, z_wx, r_wx, h_hat_wx, hm1):
         ops = self.ops
@@ -311,10 +264,7 @@ class embedding(Layer):
     def __init__(self, model, name=None, layer_type='embedding', shape=[], init_list=None):
         super(self.__class__, self).__init__(model, name=name, layer_type=layer_type)
         if not self.created:
-            if init_list is not None:
-                self.ops.append(Fetch(name=name+'_Emb_Dict', shape=shape, init_list=init_list))
-            else:
-                self.ops.append(Fetch(name=name+'_Emb_Dict', shape=shape, init_list=['uniform']))
+            self.ops.append(Fetch(name=name+'_Emb_Dict', shape=shape, init_list=init_list if init_list is not None else ['uniform']))
 
     def perform(self, x):
         return self.ops[0].p(x)
@@ -323,11 +273,8 @@ class embedding(Layer):
 class wmatrix(Layer):
     def __init__(self, model, name=None, layer_type='Wmatrix', shape=[], init_list=None):
         super(self.__class__, self).__init__(model, name=name, layer_type=layer_type)
-        if not self.created:
-            if init_list is not None:
-                self.ops.append(Fetch(name=name+'_Wmatrix', shape=shape, init_list=init_list))
-            else:
-                self.ops.append(Fetch(name=name+'_Wmatrix', shape=shape, init_list=['uniform']))
+        if not self.created: 
+            self.ops.append(Fetch(name=name+'_Wmatrix', shape=shape, init_list=init_list if init_list is not None else ['uniform']))
 
     def perform(self):
         return self.ops[0].p(get_all=True)
@@ -338,30 +285,23 @@ class attention(Layer):
 	_Linear = LinearLN if linear_mode=='LN' else Linear
         if not self.created:
             x_dim, h_dim = shape
-            if init_list is not None:
-                self.ops.append(_Linear(name=name+'_Linear_W', shape=(x_dim, h_dim), init_list=init_list))
-                self.ops.append(_Linear(name=name+'_Linear_U', shape=(h_dim, h_dim), init_list=init_list, with_bias=False))
-                self.ops.append(_Linear(name=name+'_Linear_V', shape=(h_dim, 1), init_list=init_list, with_bias=False))
-            else:
-                self.ops.append(_Linear(name=name+'_Linear_W', shape=(x_dim, h_dim)))
-                self.ops.append(_Linear(name=name+'_Linear_U', shape=(h_dim, h_dim), with_bias=False))
-                self.ops.append(_Linear(name=name+'_Linear_V', shape=(h_dim, 1), with_bias=False))
+            self.ops.append(_Linear(name=name+'_Linear_W', shape=(x_dim, h_dim), init_list=init_list if init_list is not None))
+            self.ops.append(_Linear(name=name+'_Linear_U', shape=(h_dim, h_dim), init_list=init_list if init_list is not None, with_bias=False))
+            self.ops.append(_Linear(name=name+'_Linear_V', shape=(h_dim, 1), init_list=init_list if init_list is not None, with_bias=False))
 
                 
     def perform(self, x, h):
         Wx_b = self.ops[0].p(x)
         Uh = self.ops[1].p(h)
-        alpha = softmax(self.ops[2].p(tanh(Wx_b.dimshuffle(0, 'x', 1)+Uh.dimshuffle('x', 0, 1)))[:,:,0])
-        return alpha
+	alpha = (Wx_b[:,None,:]+Uh[None,:,:]).reshape((x.shape[0]*h.shape[0],h.shape[1]))
+	alpha = self.ops[2].p(tanh(alpha)).reshape((x.shape[0],h.shape[0]))
+        return softmax_fast(alpha)
 
 class conv(Layer):
     def __init__(self, model, name=None, layer_type='conv', shape=[], init_list=None):
         super(self.__class__, self).__init__(model, name=name, layer_type=layer_type)
-        if not self.created:
-            if init_list is not None:
-                self.ops.append(Conv(name=name+'_conv', shape=shape, init_list=init_list))
-            else:
-                self.ops.append(Conv(name=name+'_conv', shape=shape))
+        if not self.created: 
+            self.ops.append(Conv(name=name+'_conv', shape=shape, init_list=init_list if init_list is not None))
 
     def perform(self, x):
         return self.ops[0].p(x)
@@ -374,15 +314,3 @@ class pooling(Layer):
     def perform(self, x):
         return self.ops[0].p(x)
 
-def get_layer(model, name=None, layer_type='', **kwargs):
-    ltype_dict = {'fully_connect':fully_connect, 'fc':fully_connect, 'lstm':lstm_seq, 'lstm_seq':lstm_seq, \
-        'lstm_flatten':lstm_flatten, 'gru_seq':gru_seq, 'gru_flatten':gru_flatten, 'gru':gru_seq, 'embedding':embedding, \
-        'emb':embedding, 'conv':conv, 'pooling':pooling, 'h_softmax':h_softmax, 'Wmatrix':wmatrix, 'attention':attention, \
-	'DRelu':drelu, 'DRelu_scaled':drelu_scaled}
-    assert ltype_dict.has_key(layer_type)
-    assert hasattr(model, 'layersPack')
-    if model.layersPack.has(name):
-        return model.layersPack.get(name)
-    else:
-        print name, kwargs
-        return ltype_dict[layer_type](model, name=name, layer_type=layer_type, **kwargs) #really?

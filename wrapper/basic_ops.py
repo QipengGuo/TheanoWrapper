@@ -25,12 +25,10 @@ class Dropout(object):
 		return h
 
 
-class Stuff_list(object):
-    init_name_list = {'uniform':INIT.uniform, 'glorot_uniform':INIT.glorot_uniform, 'orthogonal':INIT.orthogonal, 'zeros':INIT.zeros, 'ones':INIT.ones, 'mones':INIT.mones}
-    @staticmethod
-    def get_init(init_name):
-        assert Stuff_list.init_name_list.has_key(init_name)
-        return Stuff_list.init_name_list[init_name]
+def get_init(init_name):
+    init_method = getattr(INIT, init_name, None)
+    assert init_method is not None
+    return init_method
 
 class Ops_with_weights(object):
     def __init__(self, op_name = None):
@@ -52,7 +50,7 @@ class Ops_with_weights(object):
         self.updates = []
         assert len(init_list)==len(name_list) and len(name_list)==len(shape_list),  'init_list length must equals name_list and shape_list'
         for i in xrange(len(init_list)):
-            self.params[i] = theano.shared(Stuff_list.get_init(init_list[i])(shape_list[i]), name=name_list[i])
+            self.params[i] = theano.shared(get_init(init_list[i])(shape_list[i]), name=name_list[i])
         self.save_weights=save_weights
         self.created = True
 
@@ -371,8 +369,10 @@ def batched_dot4(A, B):
 def log_sum_exp():
     pass
 
-def log_softmax():
-    pass
+def log_softmax(x):
+    xdev = x - x.max(1,keepdims=True)
+    return xdev - T.log(T.sum(T.exp(xdev), axis=1, keepdims=True))
 
-def fast_softmax():
-    pass
+def fast_softmax(x):
+    e_x = T.exp(x)
+    sm = e_x / e_x.sum(axis=1, keepdims=True)
