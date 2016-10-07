@@ -24,8 +24,8 @@ model = Model() #declare a model
 
 #define network working flow
 def _step(X):
-    fc1 = T.tanh(model.fc(cur_in = X, name='fc1', shape=((in_dim, h_dim)))) #fc means fully connect layer
-    fc2 = T.tanh(model.fc(cur_in = fc1, name='fc2', shape=((h_dim, out_dim)))) 
+    fc1 = T.tanh(model.fc(X, name='fc1', shape=((in_dim, h_dim)))) #fc means fully connect layer
+    fc2 = T.tanh(model.fc(fc1, name='fc2', shape=((h_dim, out_dim)))) 
     return fc2
 
 net_out = _step(in_data) #get the output of network
