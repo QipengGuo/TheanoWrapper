@@ -142,10 +142,3 @@ class Model(object):
     def attention(self, x_in=None, h_in=None, name=None, shape=None, **kwargs):
         return get_layer(self, name=name, layer_type='attention', shape=shape, **kwargs).perform(x_in, h_in)
 
-    def DRelu(self, x_in=None, name=None, shape=None, only_func=False, **kwargs):
-        return get_layer(self, name=name, layer_type='DRelu', shape=shape, **kwargs).perform if only_func else get_layer(self, name=name, layer_type='DRelu', shape=shape, **kwargs).perform(x_in)
-
-    def DRelu_scaled(self, x_in=None, name=None, shape=None, only_func=False, **kwargs):
-        return get_layer(self, name=name, layer_type='DRelu_scaled', shape=shape, **kwargs).perform if only_func else get_layer(self, name=name, layer_type='DRelu_scaled', shape=shape, **kwargs).perform(x_in)
-
-

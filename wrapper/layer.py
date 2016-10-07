@@ -1,7 +1,7 @@
 import theano
 import theano.tensor as T
 import numpy as NP
-from basic_ops import Linear, LinearLN, Fetch, Conv, Pooling, H_Softmax, concatenate, batched_dot3, batched_dot4, log_sum_exp, log_softmax, fast_softmax, DRelu, DRelu_scaled
+from basic_ops import Linear, LinearLN, Fetch, Conv, Pooling, H_Softmax, concatenate, batched_dot3, batched_dot4, log_sum_exp, log_softmax, fast_softmax
 from activation import sigmoid, tanh, softmax, relu, softmax_fast, relu_leak
 class Layer(object):
     def __init__(self, model, name=None, layer_type=None):
@@ -43,30 +43,6 @@ class Layer(object):
             assert hasattr(op, 'get_params')
             ret = ret + op.get_params()
         return ret
-
-class drelu(Layer):
-    def __init__(self, model, name=None, layer_type='DRelu', shape=[], init_list=None):
-        super(self.__class__, self).__init__(model, name=name, layer_type=layer_type)
-        if not self.created:
-            if init_list is not None:
-                self.ops.append(DRelu(name=name+'_DRelu', shape=shape, init_list=init_list))
-            else:
-                self.ops.append(DRelu(name=name+'_DRelu', shape=shape))
-
-    def perform(self, x):
-	return self.ops[0].p(x)
-
-class drelu_scaled(Layer):
-    def __init__(self, model, name=None, layer_type='DRelu_scaled', shape=[], init_list=None):
-        super(self.__class__, self).__init__(model, name=name, layer_type=layer_type)
-        if not self.created:
-            if init_list is not None:
-                self.ops.append(DRelu_scaled(name=name+'_DRelu_scaled', shape=shape, init_list=init_list))
-            else:
-                self.ops.append(DRelu_scaled(name=name+'_DRelu_scaled', shape=shape))
-
-    def perform(self, x):
-	return self.ops[0].p(x)
 
 class fully_connect(Layer):
     def __init__(self, model, name=None, layer_type='fully_connect', shape=[], init_list=None, linear_mode=None, with_bias=True):

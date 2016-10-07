@@ -176,59 +176,6 @@ class LayerNorm(Ops_with_weights):
             return x_ln * S.dimshuffle('x', 0) + b.dimshuffle('x', 0)
 
 
-class DRelu(Ops_with_weights):
-    def __init__(self, name=None, save_weights=True, shape=[], init_list=['ones', 'mones']):
-        assert len(init_list)==2
-        assert len(shape)==1
-        super(self.__class__, self).__init__(name)
-
-        dim = shape[0]
-        shape_list = [(dim,), (dim,)]
-        name_list = [name+'_Pmax', name+'_Pmin']
-
-        self.create(save_weights=save_weights, init_list=init_list, name_list=name_list, shape_list=shape_list)
-
-    def perform(self, x):
-
-        Pmax = self.params[0]
-        Pmin = self.params[1]
-
-        if x.ndim==3:
-            Pmin = Pmin.dimshuffle('x', 'x', 0)
-            Pmax = Pmax.dimshuffle('x', 'x', 0)
-            return T.minimum(T.maximum(Pmin, x), Pmax)
-        else:
-            Pmin = Pmin.dimshuffle('x', 0)
-            Pmax = Pmax.dimshuffle('x', 0)
-            return T.minimum(T.maximum(Pmin, x), Pmax)
-
-class DRelu_scaled(Ops_with_weights):
-    def __init__(self, name=None, save_weights=True, shape=[], init_list=['ones', 'mones']):
-        assert len(init_list)==2
-        assert len(shape)==1
-        super(self.__class__, self).__init__(name)
-
-        dim = shape[0]
-        shape_list = [(dim,), (dim,)]
-        name_list = [name+'_Pmax', name+'_Pmin']
-
-        self.create(save_weights=save_weights, init_list=init_list, name_list=name_list, shape_list=shape_list)
-
-    def perform(self, x):
-
-        EPSI = 1e-6
-        Pmax = self.params[0]
-        Pmin = self.params[1]
-
-        if x.ndim==3:
-            Pmin = Pmin.dimshuffle('x', 'x', 0)
-            Pmax = Pmax.dimshuffle('x', 'x', 0)
-            return (T.minimum(T.maximum(Pmin, x), Pmax)-Pmin)/(Pmax-Pmin+EPSI)
-        else:
-            Pmin = Pmin.dimshuffle('x', 0)
-            Pmax = Pmax.dimshuffle('x', 0)
-            return (T.minimum(T.maximum(Pmin, x), Pmax)-Pmin)/(Pmax-Pmin+EPSI)
-
 conv2d = NN.conv2d
 if theano.config.device[:3] == 'gpu':
     import theano.sandbox.cuda.dnn as CUDNN
