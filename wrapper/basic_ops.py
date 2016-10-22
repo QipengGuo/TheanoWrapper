@@ -75,7 +75,8 @@ class Ops_with_weights(object):
         return finds == len(self.params)
 
 class LinearLN(Ops_with_weights):
-    def __init__(self, name=None, save_weights=True, shape=[], with_bias=True, init_list=['glorot_uniform', 'zeros']):
+    def __init__(self, name=None, save_weights=True, shape=[], with_bias=True, init_list=None):
+	init_list = ['glorot_uniform', 'zeros'] if init_list is None else init_list
         assert len(init_list)==2
         assert len(shape)==2
         super(self.__class__, self).__init__(name)
@@ -120,7 +121,8 @@ class LinearLN(Ops_with_weights):
                 return T.dot(x_ln, W)
 
 class Linear(Ops_with_weights):
-    def __init__(self, name=None, save_weights=True, shape=[], with_bias=True, init_list=['glorot_uniform', 'zeros']):
+    def __init__(self, name=None, save_weights=True, shape=[], with_bias=True, init_list=None):
+	init_list = ['glorot_uniform', 'zeros'] if init_list is None else init_list
         assert len(init_list)==2
         assert len(shape)==2
         super(self.__class__, self).__init__(name)
@@ -152,7 +154,8 @@ class Linear(Ops_with_weights):
 
 
 class LayerNorm(Ops_with_weights):
-    def __init__(self, name=None, save_weights=True, shape=[], init_list=['ones', 'zeros']):
+    def __init__(self, name=None, save_weights=True, shape=[], init_list=None):
+	init_list = ['ones', 'zeros'] if init_list is None else init_list
         assert len(init_list)==2
         assert len(shape)==1
         super(self.__class__, self).__init__(name)
@@ -184,7 +187,8 @@ if theano.config.device[:3] == 'gpu':
         conv2d = CUDNN.dnn_conv
 
 class Conv(Ops_with_weights):
-    def __init__(self, name=None, save_weigths=True, shape=[], init_list=['glorot_uniform']):
+    def __init__(self, name=None, save_weigths=True, shape=[], init_list=None):
+	init_list = ['glorot_uniform'] if init_list is None else init_list
         assert len(init_list)==1
         assert len(shape)==6
         super(self.__class__, self).__init__(name)
@@ -212,13 +216,13 @@ class Pooling(object):
    
 
 class Fetch(Ops_with_weights):
-    def __init__(self, name=None, save_weights=True, shape=[], init_list=['uniform']):
+    def __init__(self, name=None, save_weights=True, shape=[], init_list=None):
+	init_list = ['uniform'] if init_list is None else init_list
         assert len(init_list)==1
-        assert len(shape)==2
+        #assert len(shape)==2
         super(self.__class__, self).__init__(name)
 
-        in_dim, out_dim = shape
-        shape_list = [(in_dim, out_dim)]
+        shape_list = [shape]
         name_list = [name+'D']
         self.create(save_weights=save_weights, init_list=init_list, name_list=name_list, shape_list=shape_list)
 
@@ -231,7 +235,8 @@ class Fetch(Ops_with_weights):
             return D[x]
 
 class H_Softmax(Ops_with_weights):
-    def __init__(self, name=None, save_weights=True, shape=[], init_list=['glorot_uniform', 'glorot_uniform', 'glorot_uniform', 'glorot_uniform']):
+    def __init__(self, name=None, save_weights=True, shape=[], init_list=None):
+	init_list = ['glorot_uniform', 'glorot_uniform', 'glorot_uniform', 'glorot_uniform'] if init_list is None else init_list
         assert len(init_list)==4
         assert len(shape)==2
         super(self.__class__, self).__init__(name)

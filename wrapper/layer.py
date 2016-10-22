@@ -49,7 +49,7 @@ class fully_connect(Layer):
         super(self.__class__, self).__init__(model, name=name, layer_type=layer_type)
 	_Linear = LinearLN if linear_mode=='LN' else Linear
         if not self.created:
-            self.ops.append(_Linear(name=name+'_Linear', shape=shape, init_list=init_list if init_list is not None, with_bias=with_bias))
+            self.ops.append(_Linear(name=name+'_Linear', shape=shape, init_list=init_list if init_list is not None else None, with_bias=with_bias))
 
     def perform(self, x):
         L_trans = self.ops[0].p
@@ -59,7 +59,7 @@ class h_softmax(Layer):
     def __init__(self, model, name=None, layer_type='h_softmax', shape=[], init_list=None):
         super(self.__class__, self).__init__(model, name=name, layer_type=layer_type)
         if not self.created:
-            self.ops.append(H_Softmax(name=name+'_H_Softmax', shape=shape, init_list=init_list if init_list is not None))
+            self.ops.append(H_Softmax(name=name+'_H_Softmax', shape=shape, init_list=init_list if init_list is not None else None))
 
     def perform(self, x, y=None):
         return self.ops[0].p(x, y)
@@ -247,10 +247,10 @@ class embedding(Layer):
         
 
 class wmatrix(Layer):
-    def __init__(self, model, name=None, layer_type='Wmatrix', shape=[], init_list=None):
+    def __init__(self, model, name=None, layer_type='wmatrix', shape=[], init_list=None):
         super(self.__class__, self).__init__(model, name=name, layer_type=layer_type)
         if not self.created: 
-            self.ops.append(Fetch(name=name+'_Wmatrix', shape=shape, init_list=init_list if init_list is not None else ['uniform']))
+            self.ops.append(Fetch(name=name+'_wmatrix', shape=shape, init_list=init_list if init_list is not None else ['uniform']))
 
     def perform(self):
         return self.ops[0].p(get_all=True)
@@ -261,9 +261,9 @@ class attention(Layer):
 	_Linear = LinearLN if linear_mode=='LN' else Linear
         if not self.created:
             x_dim, h_dim = shape
-            self.ops.append(_Linear(name=name+'_Linear_W', shape=(x_dim, h_dim), init_list=init_list if init_list is not None))
-            self.ops.append(_Linear(name=name+'_Linear_U', shape=(h_dim, h_dim), init_list=init_list if init_list is not None, with_bias=False))
-            self.ops.append(_Linear(name=name+'_Linear_V', shape=(h_dim, 1), init_list=init_list if init_list is not None, with_bias=False))
+            self.ops.append(_Linear(name=name+'_Linear_W', shape=(x_dim, h_dim), init_list=init_list if init_list is not None else None))
+            self.ops.append(_Linear(name=name+'_Linear_U', shape=(h_dim, h_dim), init_list=init_list if init_list is not None else None, with_bias=False))
+            self.ops.append(_Linear(name=name+'_Linear_V', shape=(h_dim, 1), init_list=init_list if init_list is not None else None, with_bias=False))
 
                 
     def perform(self, x, h):
@@ -277,7 +277,7 @@ class conv(Layer):
     def __init__(self, model, name=None, layer_type='conv', shape=[], init_list=None):
         super(self.__class__, self).__init__(model, name=name, layer_type=layer_type)
         if not self.created: 
-            self.ops.append(Conv(name=name+'_conv', shape=shape, init_list=init_list if init_list is not None))
+            self.ops.append(Conv(name=name+'_conv', shape=shape, init_list=init_list if init_list is not None else None))
 
     def perform(self, x):
         return self.ops[0].p(x)

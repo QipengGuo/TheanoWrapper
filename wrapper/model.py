@@ -114,7 +114,7 @@ class Model(object):
         self.layersPack.clear_state()
 
     def fc(self, x_in=None, name=None, shape=None, **kwargs):
-        return get_layer(self, name=name, layer_type='fc', shape=shape, **kwargs).perform(x_in)
+        return get_layer(self, name=name, layer_type='fully_connect', shape=shape, **kwargs).perform(x_in)
 
     def h_softmax(self, x_in=None, y_in=None, name=None, shape=None, **kwargs):
         return get_layer(self, name=name, layer_type='h_softmax', shape=shape, **kwargs).perform(x_in, y_in)
@@ -136,8 +136,8 @@ class Model(object):
     def embedding(self, x_in=None, name=None, shape=None, **kwargs):
         return get_layer(self, name=name, layer_type='embedding', shape=shape, **kwargs).perform(x_in)
 
-    def Wmatrix(self, name=None, shape=None, **kwargs):
-        return get_layer(self, name=name, layer_type='Wmatrix', shape=shape, **kwargs).perform()
+    def wmatrix(self, name=None, shape=None, **kwargs):
+        return get_layer(self, name=name, layer_type='wmatrix', shape=shape, **kwargs).perform()
 
     def attention(self, x_in=None, h_in=None, name=None, shape=None, **kwargs):
         return get_layer(self, name=name, layer_type='attention', shape=shape, **kwargs).perform(x_in, h_in)

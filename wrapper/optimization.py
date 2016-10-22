@@ -32,7 +32,7 @@ def sgd(cost, params, lr, iterations, momentum=0.9, decay=0.05):  #lr and iterat
         updates.append((p, new_p))
     return updates
 
-def rmsprop(cost, params, lr=0.0001, rho=0.99, epsilon=1e-6, rescale=1. , ignore_input_disconnect=False):
+def rmsprop(cost, params, lr=0.0001, rho=0.99, epsilon=1e-6, rescale=1. , ignore_input_disconnect=False, return_norm=True):
     '''
     Borrowed from keras, no constraints, though
     '''
@@ -47,7 +47,8 @@ def rmsprop(cost, params, lr=0.0001, rho=0.99, epsilon=1e-6, rescale=1. , ignore
         updates.append((a, new_a))
         new_p = p - lr * g / T.sqrt(new_a + epsilon)
         updates.append((p, new_p))
-
+	if return_norm:
+		return updates, grad_norm
     return updates
 
 #need fix
