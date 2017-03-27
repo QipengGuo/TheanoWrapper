@@ -53,6 +53,11 @@ class Ops_with_weights(object):
             self.params[i] = theano.shared(get_init(init_list[i])(shape_list[i]), name=name_list[i])
         self.save_weights=save_weights
         self.created = True
+        print 'Create Ops ', name_list
+
+    def reinit(self):
+        for i in xrange(len(self.init_list)):
+            self.params[i].set_value(get_init(self.init_list[i])(self.shape_list[i]))
 
     def perform(self):
         return NotImplemented
@@ -67,8 +72,9 @@ class Ops_with_weights(object):
         finds = 0
         for i in xrange(len(self.params)):
             target_name = self.name_list[i]
+            target_shape = self.shape_list[i]
             for p in data:
-                if p.name == target_name:
+                if p.name == target_name and p.get_value().shape == target_shape:
                     self.params[i].set_value(p.get_value())
                     finds += 1
                     break
@@ -187,7 +193,7 @@ if theano.config.device[:3] == 'gpu':
         conv2d = CUDNN.dnn_conv
 
 class Conv(Ops_with_weights):
-    def __init__(self, name=None, save_weigths=True, shape=[], init_list=None):
+    def __init__(self, name=None, save_weights=True, shape=[], init_list=None):
 	init_list = ['glorot_uniform'] if init_list is None else init_list
         assert len(init_list)==1
         assert len(shape)==6
@@ -199,12 +205,11 @@ class Conv(Ops_with_weights):
         self.create(save_weights=save_weights, init_list=init_list, name_list=name_list, shape_list=shape_list)
 
     def perform(self, x):
-        conv_h = conv2d(x, self.params[0], subsample=(self.conv_stride_row, self.conv_stride_col))
+        conv_h = conv2d(x, self.params[0], subsample=(self.conv_stride_row, self.conv_stride_col), border_mode='half')
         return conv_h
 
 class Pooling(object):
     def __init__(self, name=None, shape=[]):
-        assert len(init_list)==1
         assert len(shape)==2
         self.name=name
         self.pool_shape=shape
@@ -213,6 +218,15 @@ class Pooling(object):
     def perform(self, x):
         pool_h = pool_2d(x, self.pool_shape, ignore_border=True)
         return pool_h
+
+    def get_updates(self):
+        return []
+
+    def get_params(self):
+        return []
+
+    def load(self, data):
+        return 
    
 
 class Fetch(Ops_with_weights):

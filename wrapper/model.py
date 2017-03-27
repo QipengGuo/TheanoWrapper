@@ -107,11 +107,22 @@ class Model(object):
     def get_params(self, ignore_list=[], given_list=[]):
         return self.layersPack.get_params(ignore_list=ignore_list, given_list=given_list)
 
+    def get_params_by_name(self, name):
+        params = self.get_params()
+        for p in params:
+            if p.name==name:
+                return p
+        print 'Can not find the parameters named', name
+        return None
+
     def get_updates(self):
         return self.layersPack.get_updates()
 
     def clear_state(self):
         self.layersPack.clear_state()
+
+    def reinit(self, name):
+        get_layer(self, name=name).reinit()
 
     def fc(self, x_in=None, name=None, shape=None, **kwargs):
         return get_layer(self, name=name, layer_type='fully_connect', shape=shape, **kwargs).perform(x_in)
@@ -141,4 +152,9 @@ class Model(object):
 
     def attention(self, x_in=None, h_in=None, name=None, shape=None, **kwargs):
         return get_layer(self, name=name, layer_type='attention', shape=shape, **kwargs).perform(x_in, h_in)
+
+    def conv(self, x_in=None, name=None, shape=None, **kwargs):
+        return get_layer(self, name=name, layer_type='conv', shape=shape, **kwargs).perform(x_in)
+    def pooling(self, x_in=None, name=None, shape=None, **kwargs):
+        return get_layer(self, name=name, layer_type='pooling', shape=shape, **kwargs).perform(x_in)
 

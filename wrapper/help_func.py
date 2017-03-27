@@ -1,4 +1,14 @@
+import theano.tensor as T
 import numpy as NP
+
+
+def letanh(x):
+    return 1.7159*tanh(2.0/3.0*x)
+
+def categorical_crossentropy(prob, true_idx):
+    true_idx = T.arange(true_idx.shape[0]) * prob.shape[1] + true_idx
+    t1 = prob.flatten()[true_idx]
+    return -t1
 
 def auto_batch(func, batch_size, *args):
     result = []

@@ -44,6 +44,11 @@ class Layer(object):
             ret = ret + op.get_params()
         return ret
 
+    def reinit(self):
+        for op in self.ops:
+            assert hasattr(op, 'reinit')
+            op.reinit()
+
 class fully_connect(Layer):
     def __init__(self, model, name=None, layer_type='fully_connect', shape=[], init_list=None, linear_mode=None, with_bias=True):
         super(self.__class__, self).__init__(model, name=name, layer_type=layer_type)
